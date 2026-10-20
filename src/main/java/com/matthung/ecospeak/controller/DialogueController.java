@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 @RestController
 @RequestMapping("/api/dialogs")
-public class DialogsController {
+public class DialogueController {
 
     @GetMapping("generate")
     public ResponseEntity<?> generate() {
