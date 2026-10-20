@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>EcoSpeak</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 60px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            margin-bottom: 0;
+        }
+
+        .subtitle {
+            margin-top: 5px;
+            color: #666;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #generateButton {
+            margin-top: 20px;
+        }
+
+        #loading {
+            margin-top: 20px;
+        }
+
+        #error {
+            margin-top: 20px;
+            color: #c00;
+        }
+
+        #result {
+            margin-top: 40px;
+        }
+
+        .target-phrase {
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .dialogue-line {
+            margin: 12px 0;
+        }
+
+        .speaker {
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>EcoSpeak</h1>
+<p class="subtitle">Practice natural English in 3 minutes.</p>
+
+<button id="generateButton" onclick="generateDialogue()">
+    Generate Dialogue
+</button>
+
+<div id="loading" class="hidden">
+    Generating...
+</div>
+
+<div id="error" class="hidden">
+    Something went wrong. Please try again.
+</div>
+
+<div id="result" class="hidden">
+
+    <h2 id="topic"></h2>
+
+    <div class="target-phrase">
+        <strong>Target Phrase</strong>
+        <div id="targetPhrase"></div>
+    </div>
+
+    <div id="dialogue"></div>
+
+</div>
+
+<script>
+    async function generateDialogue() {
+
+        const button = document.getElementById('generateButton');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const result = document.getElementById('result');
+
+        button.disabled = true;
+        loading.classList.remove('hidden');
+        error.classList.add('hidden');
+
+        try {
+
+            const response = await fetch('/api/dialogs/generate');
+
+            if (!response.ok) {
+                throw new Error('Failed to generate dialogue');
+            }
+
+            const data = await response.json();
+
+            document.getElementById('topic').textContent = data.topic;
+            document.getElementById('targetPhrase').textContent =
+                data.targetPhrase;
+
+            const dialogueElement =
+                document.getElementById('dialogue');
+
+            dialogueElement.innerHTML = '';
+
+            data.dialogue.forEach(line => {
+
+                const lineElement = document.createElement('div');
+                lineElement.className = 'dialogue-line';
+
+                const speakerElement = document.createElement('span');
+                speakerElement.className = 'speaker';
+                speakerElement.textContent = line.speaker + ':';
+
+                const textElement = document.createElement('span');
+                textElement.textContent = line.text;
+
+                lineElement.appendChild(speakerElement);
+                lineElement.appendChild(textElement);
+
+                dialogueElement.appendChild(lineElement);
+            });
+
+            result.classList.remove('hidden');
+
+            button.textContent = 'Generate Another';
+
+        } catch (e) {
+
+            console.error(e);
+
+            error.classList.remove('hidden');
+
+        } finally {
+
+            loading.classList.add('hidden');
+            button.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
