@@ -1,6 +1,9 @@
 package com.matthung.ecospeak.dto;
 
-public record DialogueLine(
-        String speaker,
-        String text) {
+import lombok.Data;
+
+@Data
+public class DialogueLine {
+    public String speaker;
+    public String text;
 }
