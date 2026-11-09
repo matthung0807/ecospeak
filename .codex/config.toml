@@ -1,3 +1,10 @@
+[features]
+multi_agent = true
+
 [mcp_servers.playwright]
 command = "npx"
-args = ["@playwright/mcp@latest"]
+args = ["-y", "@playwright/mcp@latest"]
+
+[agents.playwright-tester]
+description = "Browser testing agent using Playwright MCP"
+config_file = "agents/playwright-tester.toml"
