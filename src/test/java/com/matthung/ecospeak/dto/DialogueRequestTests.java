@@ -11,15 +11,15 @@ class DialogueRequestTests {
 
     @Test
     void matchesJavascriptTrimWhitespace() {
-        assertEquals("", new DialogueRequest(TRIM_WHITESPACE).normalizedScenario());
+        assertEquals("", new DialogueRequest(TRIM_WHITESPACE).trimmedScenario());
         assertEquals("Ordering  coffee", new DialogueRequest(
-                TRIM_WHITESPACE + "Ordering  coffee" + TRIM_WHITESPACE).normalizedScenario());
+                TRIM_WHITESPACE + "Ordering  coffee" + TRIM_WHITESPACE).trimmedScenario());
     }
 
     @Test
     void preservesCharactersNotRemovedByJavascriptTrim() {
         for (String value : new String[] {"\u0085", "\u180E", "\u200B", "\u0000"}) {
-            assertEquals(value, new DialogueRequest(value).normalizedScenario());
+            assertEquals(value, new DialogueRequest(value).trimmedScenario());
         }
     }
 }

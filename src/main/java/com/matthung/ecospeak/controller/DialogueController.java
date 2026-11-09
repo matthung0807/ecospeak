@@ -23,7 +23,7 @@ public class DialogueController {
 
     @PostMapping(value = "generate", consumes = "application/json")
     public ResponseEntity<?> generate(@RequestBody DialogueRequest request) {
-        String scenario = request.normalizedScenario();
+        String scenario = request.trimmedScenario();
         if (scenario.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please enter a scenario.");
         }
