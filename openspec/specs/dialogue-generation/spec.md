@@ -6,21 +6,38 @@ Describe the existing server-side generation of an AI-selected English practice 
 
 ## Requirements
 
-### Requirement: Generate a dialogue without user input
-The system SHALL expose `GET /api/dialogs/generate` without requiring a request body, scenario, or target phrase, and SHALL return the generated dialogue with HTTP 200 when generation succeeds. The system SHALL use its fixed prompt rather than incorporating user-supplied scenario or phrase parameters.
+### Requirement: Generate a dialogue from a scenario
+The system SHALL expose `POST /api/dialogs/generate` accepting a JSON object with a required string `scenario`. It SHALL trim surrounding whitespace and return HTTP 200 with the generated dialogue on success. Missing, null, empty, or whitespace-only scenarios SHALL return HTTP 400 before any AI request. The input-free GET endpoint SHALL no longer generate dialogues.
 
 #### Scenario: Successful generation
-- **WHEN** a client requests `GET /api/dialogs/generate` and the generation service returns a dialogue
+- **WHEN** a client posts `{ "scenario": "Ordering coffee" }` and generation succeeds
 - **THEN** the response is HTTP 200 with `topic`, `targetPhrase`, and `dialogue` fields
 - **AND** each dialogue entry has `speaker` and `text` fields
 
+#### Scenario: Reject invalid scenario
+- **WHEN** a client posts an absent body, an object without `scenario`, or a null, empty, or whitespace-only scenario
+- **THEN** the response is HTTP 400 and no AI generation request is sent
+
+#### Scenario: Normalize surrounding whitespace
+- **WHEN** a client posts `{ "scenario": "  Ordering coffee  " }`
+- **THEN** generation uses `Ordering coffee` as the scenario
+
+#### Scenario: Retire input-free generation
+- **WHEN** a client requests `GET /api/dialogs/generate`
+- **THEN** the response is HTTP 405 and no AI generation request is sent
+
 ### Requirement: Request structured AI output
-The service SHALL call the OpenAI Responses API with model `gpt-5-mini`, the fixed English coaching prompt, and `DialogueResponse.class` as the structured output type. The service SHALL construct its client using `OpenAIOkHttpClient.fromEnv()`.
+The service SHALL call the OpenAI Responses API with model `gpt-5-mini`, the English coaching instructions and the validated scenario, and `DialogueResponse.class` as the structured output type. The service SHALL construct its client using `OpenAIOkHttpClient.fromEnv()`.
 
 #### Scenario: Generation request
-- **WHEN** generation is invoked
-- **THEN** the service requests a structured response containing a topic string, a target phrase string, and a list of speaker/text entries
-- **AND** no user-selected topic or target phrase is included in the prompt
+- **WHEN** generation is invoked with a valid scenario
+- **THEN** the request instructs the AI to generate the conversation for that scenario
+- **AND** it requests a structured response containing a topic string, a target phrase string, and a list of speaker/text entries
+- **AND** the target phrase is selected by the AI rather than supplied by the user
+
+#### Scenario: Updated scenario reaches generation
+- **WHEN** a subsequent valid request supplies `Making an appointment` after an earlier `Ordering coffee` request
+- **THEN** the subsequent AI request includes `Making an appointment` as its scenario rather than reusing the previous scenario
 
 ### Requirement: Instruct the model to produce short natural conversation
 The prompt SHALL request one short, realistic everyday English conversation for upper-intermediate learners, exactly two participants named A and B, 4–5 dialogue lines, one speaker per line, and exactly one natural, useful target phrase appearing naturally in the dialogue. It SHALL request a short descriptive topic, focus on practicing the phrase, conversational English, and avoidance of unnecessarily complicated vocabulary and textbook-style expressions.
