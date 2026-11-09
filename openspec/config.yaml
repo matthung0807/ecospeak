@@ -1,5 +1,25 @@
 schema: spec-driven
 
+context: |
+  Project: EcoSpeak
+
+  Product proposal:
+  - docs/product_proposal.md
+
+  This is an existing, implemented application.
+
+  When creating or updating specifications:
+  - Read docs/product_proposal.md for product intent and MVP scope.
+  - Inspect the existing source code for actual implemented behavior.
+  - Treat source code as the source of truth for current behavior.
+  - Do not invent unimplemented features.
+  - Identify differences between the proposal and implementation.
+
+rules:
+  specs:
+    - Describe existing behavior using requirements and scenarios.
+    - Do not include unimplemented features in baseline specs.
+
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
 # Include constraints an agent cannot infer by reading the code.
