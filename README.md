@@ -1,3 +1,56 @@
+# EcoSpeak
+
+## Using the practice page
+
+1. Open the home page and enter a scenario, such as `Ordering coffee`.
+2. Click **Generate Dialogue**. Empty or whitespace-only input shows
+   `Please enter a scenario.` without sending a request.
+3. Read the returned topic, target phrase, and A/B dialogue on the same page.
+4. Edit the retained scenario and click **Generate Another** to generate again.
+
+While generating, the button is disabled and the previous result stays visible.
+If generation fails, the page shows `Something went wrong. Please try again.`;
+the input and previous result remain available for editing and retry.
+
+This implements US-01 and the missing input-dependent portion of FR-03 from
+`docs/product_proposal.md`. It does not establish generated language quality or
+learning effectiveness.
+
+## Generation API
+
+Run with Java 25 and `OPENAI_API_KEY` set: `./mvnw spring-boot:run`.
+The default URL is `http://localhost:8080`; `PORT` can override the port.
+
+`POST /api/dialogs/generate` accepts a JSON object with a required string `scenario`:
+
+```sh
+curl -X POST http://localhost:8080/api/dialogs/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"scenario":"Ordering coffee"}'
+```
+
+A successful response is HTTP 200 with `topic`, `targetPhrase`, and a `dialogue`
+array of `{ "speaker": "A", "text": "..." }` entries. The backend includes the
+scenario in its structured AI generation request. The AI selects the target phrase.
+
+Missing bodies and missing, null, empty, or whitespace-only scenarios return
+HTTP 400 before AI generation. Surrounding whitespace is removed using JavaScript
+`trim()` semantics; internal whitespace is preserved. The former input-free
+`GET /api/dialogs/generate` contract is retired and returns HTTP 405.
+
+The prompt requests a natural A/B conversation of 4–5 lines with the target phrase.
+These content constraints are prompt instructions, not application-level checks of
+the generated dialogue's language quality, length, or phrase occurrence.
+
+Run backend tests with `./mvnw test` using Java 25. Tests mock provider access and
+do not need a real API key.
+
+## Earlier PRD
+
+The document below is retained as earlier product planning. Current MVP intent is
+in `docs/product_proposal.md`; implementation differences are tracked in
+`docs/implementation-comparison.md`.
+
 # PRD：輕量化英語口說情境生成 App（MVP）
 
 ## 文件資訊

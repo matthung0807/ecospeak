@@ -34,6 +34,18 @@
             margin-top: 20px;
         }
 
+        label {
+            display: block;
+            margin-top: 20px;
+        }
+
+        #scenario {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 10px;
+            font: inherit;
+        }
+
         #loading {
             margin-top: 20px;
         }
@@ -74,6 +86,10 @@
 <h1>EcoSpeak</h1>
 <p class="subtitle">Practice natural English in 3 minutes.</p>
 
+<label for="scenario">Scenario</label>
+<input id="scenario" type="text" placeholder="Ordering coffee"
+       aria-describedby="error">
+
 <button id="generateButton" onclick="generateDialogue()">
     Generate Dialogue
 </button>
@@ -82,7 +98,7 @@
     Generating...
 </div>
 
-<div id="error" class="hidden">
+<div id="error" class="hidden" role="alert">
     Something went wrong. Please try again.
 </div>
 
@@ -107,13 +123,33 @@
         const error = document.getElementById('error');
         const result = document.getElementById('result');
 
+        if (button.disabled) {
+            return;
+        }
+
+        const scenarioInput = document.getElementById('scenario');
+        const scenario = scenarioInput.value.trim();
+
+        if (!scenario) {
+            error.textContent = 'Please enter a scenario.';
+            error.classList.remove('hidden');
+            scenarioInput.setAttribute('aria-invalid', 'true');
+            scenarioInput.focus();
+            return;
+        }
+
         button.disabled = true;
         loading.classList.remove('hidden');
         error.classList.add('hidden');
+        scenarioInput.removeAttribute('aria-invalid');
 
         try {
 
-            const response = await fetch('/api/dialogs/generate');
+            const response = await fetch('/api/dialogs/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scenario })
+            });
 
             if (!response.ok) {
                 throw new Error('Failed to generate dialogue');
@@ -156,6 +192,7 @@
 
             console.error(e);
 
+            error.textContent = 'Something went wrong. Please try again.';
             error.classList.remove('hidden');
 
         } finally {
