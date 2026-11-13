@@ -27,7 +27,7 @@ The system SHALL expose `POST /api/dialogs/generate` accepting a JSON object wit
 - **THEN** the response is HTTP 405 and no AI generation request is sent
 
 ### Requirement: Request structured AI output
-The service SHALL call the OpenAI Responses API with model `gpt-5-mini`, the English coaching instructions and the validated scenario, and `DialogueResponse.class` as the structured output type. The service SHALL construct its client using `OpenAIOkHttpClient.fromEnv()`.
+The service SHALL call the OpenAI Responses API with model `gpt-5.6-terra`, the English coaching instructions and the validated scenario, and `DialogueResponse.class` as the structured output type. The service SHALL construct its client using `OpenAIOkHttpClient.fromEnv()`.
 
 #### Scenario: Generation request
 - **WHEN** generation is invoked with a valid scenario

@@ -45,7 +45,7 @@ public class DialogueService {
                 """;
 
         StructuredResponseCreateParams<DialogueResponse> params = ResponseCreateParams.builder()
-                .model("gpt-5-mini")
+                .model("gpt-5.6-terra")
                 .instructions(prompt)
                 .input(scenario)
                 .text(DialogueResponse.class)

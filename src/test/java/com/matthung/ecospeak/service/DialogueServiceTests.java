@@ -49,7 +49,7 @@ class DialogueServiceTests {
         assertEquals("Making an appointment", captured.get(1).rawParams().input().orElseThrow().asText());
         for (var request : captured) {
             assertEquals(DialogueResponse.class, request.responseType());
-            assertEquals("gpt-5-mini", request.rawParams().model().orElseThrow().asString());
+            assertEquals("gpt-5.6-terra", request.rawParams().model().orElseThrow().asString());
             var instructions = request.rawParams().instructions().orElseThrow();
             assertTrue(instructions.contains("Base the conversation on the user-provided scenario"));
             assertTrue(instructions.contains("exactly two participants: A and B"));
