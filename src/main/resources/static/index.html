@@ -157,6 +157,22 @@
 
             const data = await response.json();
 
+            const isObject = value =>
+                value !== null && typeof value === 'object' && !Array.isArray(value);
+            const isNonblankString = value =>
+                typeof value === 'string' && value.trim().length > 0;
+
+            if (!isObject(data)
+                    || !isNonblankString(data.topic)
+                    || !isNonblankString(data.targetPhrase)
+                    || !Array.isArray(data.dialogue)
+                    || data.dialogue.length === 0
+                    || !data.dialogue.every(line => isObject(line)
+                        && isNonblankString(line.speaker)
+                        && isNonblankString(line.text))) {
+                throw new Error('Invalid dialogue response');
+            }
+
             document.getElementById('topic').textContent = data.topic;
             document.getElementById('targetPhrase').textContent =
                 data.targetPhrase;
