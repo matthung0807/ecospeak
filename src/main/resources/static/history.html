@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History – EcoSpeak</title>
+    <link rel="stylesheet" href="history.css">
+</head>
+<body>
+<nav><button onclick="location.href='index.html'">Go back</button></nav>
+<h1>History</h1>
+<p class="subtitle">Your 10 newest dialogues. History is cleared when the application shuts down.</p>
+<p id="status" role="status">Loading history...</p>
+<p id="error" class="error hidden" role="alert"></p>
+<ol id="historyList"></ol>
+<script>
+    const validId = value => typeof value === 'string'
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+    async function loadHistory() {
+        const status = document.getElementById('status');
+        try {
+            const response = await fetch('/api/dialogs/history', { cache: 'no-store' });
+            if (!response.ok) throw new Error('History request failed');
+            const items = await response.json();
+            if (!Array.isArray(items) || items.length > 10 || !items.every(item => item
+                    && validId(item.id) && typeof item.topic === 'string' && item.topic.trim())) {
+                throw new Error('Invalid history response');
+            }
+            const fragment = document.createDocumentFragment();
+            items.forEach(item => {
+                const row = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = 'dialogue.html?id=' + encodeURIComponent(item.id);
+                link.textContent = item.topic;
+                row.append(link);
+                fragment.append(row);
+            });
+            document.getElementById('historyList').replaceChildren(fragment);
+            status.textContent = items.length ? '' : 'No dialogue history yet. Generate a dialogue to get started.';
+        } catch (exception) {
+            status.textContent = '';
+            const error = document.getElementById('error');
+            error.textContent = 'Could not load history. Please try again.';
+            error.classList.remove('hidden');
+        }
+    }
+    loadHistory();
+</script>
+</body>
+</html>

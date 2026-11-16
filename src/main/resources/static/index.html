@@ -94,6 +94,12 @@
     Generate Dialogue
 </button>
 
+<button id="historyButton" onclick="location.href='history.html'">History</button>
+
+<div id="saveWarning" class="hidden" role="status" style="margin-top:20px;color:#805500">
+    Dialogue generated, but could not be saved to history.
+</div>
+
 <div id="loading" class="hidden">
     Generating...
 </div>
@@ -141,6 +147,7 @@
         button.disabled = true;
         loading.classList.remove('hidden');
         error.classList.add('hidden');
+        document.getElementById('saveWarning').classList.add('hidden');
         scenarioInput.removeAttribute('aria-invalid');
 
         try {
@@ -203,6 +210,7 @@
             result.classList.remove('hidden');
 
             button.textContent = 'Generate Another';
+            document.getElementById('saveWarning').classList.toggle('hidden', data.historySaved !== false);
 
         } catch (e) {
 

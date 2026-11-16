@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved dialogue – EcoSpeak</title>
+    <link rel="stylesheet" href="history.css">
+</head>
+<body>
+<nav>
+    <button onclick="location.href='history.html'">Go back</button>
+    <button onclick="location.href='index.html'">Home</button>
+</nav>
+<h1>Saved dialogue</h1>
+<p id="status" role="status">Loading dialogue...</p>
+<p id="error" class="error hidden" role="alert"></p>
+<section id="result" class="hidden">
+    <h2 id="topic"></h2>
+    <div class="target-phrase"><strong>Target Phrase</strong><div id="targetPhrase"></div></div>
+    <div id="dialogue"></div>
+</section>
+<script>
+    async function loadDialogue() {
+        const status = document.getElementById('status');
+        const error = document.getElementById('error');
+        const id = new URLSearchParams(location.search).get('id');
+        if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+            status.textContent = 'Please select a valid dialogue from History.';
+            return;
+        }
+        try {
+            const response = await fetch('/api/dialogs/history/' + encodeURIComponent(id), { cache: 'no-store' });
+            if (response.status === 404) {
+                status.textContent = 'Dialogue not found. It may have expired or the application may have restarted.';
+                return;
+            }
+            if (!response.ok) throw new Error('Dialogue request failed');
+            const data = await response.json();
+            const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+            const nonblank = value => typeof value === 'string' && value.trim().length > 0;
+            if (!object(data) || !nonblank(data.topic) || !nonblank(data.targetPhrase)
+                    || !Array.isArray(data.dialogue) || !data.dialogue.length
+                    || !data.dialogue.every(line => object(line) && nonblank(line.speaker) && nonblank(line.text))) {
+                throw new Error('Invalid dialogue response');
+            }
+            const fragment = document.createDocumentFragment();
+            data.dialogue.forEach(line => {
+                const row = document.createElement('div');
+                row.className = 'dialogue-line';
+                const speaker = document.createElement('span');
+                speaker.className = 'speaker';
+                speaker.textContent = line.speaker + ':';
+                const text = document.createElement('span');
+                text.textContent = line.text;
+                row.append(speaker, text);
+                fragment.append(row);
+            });
+            document.getElementById('topic').textContent = data.topic;
+            document.getElementById('targetPhrase').textContent = data.targetPhrase;
+            document.getElementById('dialogue').replaceChildren(fragment);
+            document.getElementById('result').classList.remove('hidden');
+            status.textContent = '';
+        } catch (exception) {
+            status.textContent = '';
+            error.textContent = 'Could not load dialogue. Please try again.';
+            error.classList.remove('hidden');
+        }
+    }
+    loadDialogue();
+</script>
+</body>
+</html>

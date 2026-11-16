@@ -17,15 +17,18 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.matthung.ecospeak.dto.DialogueLine;
 import com.matthung.ecospeak.dto.DialogueResponse;
 import com.matthung.ecospeak.service.DialogueService;
+import com.matthung.ecospeak.history.HistoryService;
 
 class DialogueControllerTests {
     private DialogueService service;
     private MockMvc mvc;
+    private HistoryService history;
 
     @BeforeEach
     void setUp() {
         service = mock(DialogueService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new DialogueController(service)).build();
+        history = mock(HistoryService.class);
+        mvc = MockMvcBuilders.standaloneSetup(new DialogueController(service, history)).build();
     }
 
     @Test
@@ -63,5 +66,58 @@ class DialogueControllerTests {
     void getNoLongerGenerates() throws Exception {
         mvc.perform(get("/api/dialogs/generate")).andExpect(status().isMethodNotAllowed());
         verifyNoInteractions(service);
+    }
+
+    private DialogueResponse validResponse() {
+        var response = new DialogueResponse();
+        response.setTopic("Coffee"); response.setTargetPhrase("Could I get");
+        var line = new DialogueLine(); line.setSpeaker("Someone"); line.setText("Hello");
+        response.setDialogue(List.of(line));
+        return response;
+    }
+
+    @Test
+    void saveSuccessReturnsAdditiveMetadata() throws Exception {
+        var response = validResponse();
+        var id = java.util.UUID.randomUUID();
+        when(service.generate("Coffee")).thenReturn(response);
+        when(history.save(eq("Coffee"), same(response), any())).thenReturn(id);
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Coffee\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.historySaved").value(true))
+                .andExpect(jsonPath("$.historyId").value(id.toString()));
+        verify(history).save(eq("Coffee"), same(response), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"serialization", "insert", "cleanup", "commit"})
+    void storageFailurePreservesGeneratedContent(String stage) throws Exception {
+        when(service.generate("Coffee")).thenReturn(validResponse());
+        when(history.save(anyString(), any(), any())).thenThrow(new IllegalStateException(stage));
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Coffee\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.historySaved").value(false))
+                .andExpect(jsonPath("$.historyId").isEmpty())
+                .andExpect(jsonPath("$.topic").value("Coffee"))
+                .andExpect(jsonPath("$.dialogue[0].text").value("Hello"));
+    }
+
+    @Test
+    void incompleteOutputNeverSaved() {
+        var response = validResponse(); response.setTargetPhrase("\u00a0\ufeff");
+        when(service.generate("Coffee")).thenReturn(response);
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.servlet.ServletException.class, () ->
+            mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Coffee\"}")));
+        verifyNoInteractions(history);
+    }
+
+    @Test
+    void providerFailureNeverSaved() {
+        when(service.generate("Coffee")).thenThrow(new IllegalStateException("provider failed"));
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.servlet.ServletException.class, () ->
+            mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Coffee\"}")));
+        verifyNoInteractions(history);
     }
 }

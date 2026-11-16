@@ -45,6 +45,62 @@ the generated dialogue's language quality, length, or phrase occurrence.
 Run backend tests with `./mvnw test` using Java 25. Tests mock provider access and
 do not need a real API key.
 
+## Dialogue history
+
+Select **History** on the home page to open `history.html`, then select a topic
+to read that saved dialogue on `dialogue.html?id=<uuid>`. **Go back** returns to
+the preceding page in this flow; **Home** returns to `index.html`. Generating a
+dialogue still displays it on the home page.
+
+Only the newest **10** successfully saved records are retained. Saving another
+record atomically deletes older records. Records are ordered by UTC generation
+completion time descending, then canonical UUID string descending for timestamp
+ties. Repeated topics are separate records identified by UUID.
+
+History uses **in-memory H2** and disappears when the application shuts down,
+including development restarts. Generated dialogue history is never stored in
+database files or browser storage. There is no file fallback, pagination, or
+authentication in the current localhost setup.
+
+Generation responses keep `topic`, `targetPhrase`, and `dialogue`, and add:
+
+```json
+{ "historySaved": true, "historyId": "06490fe2-1fe2-43a4-b14f-8f9f547a23a4" }
+```
+
+If storage fails after generation, HTTP 200 still contains the generated content
+with `historySaved: false` and `historyId: null`. The home page displays the content
+and warns `Dialogue generated, but could not be saved to history.`.
+
+Read APIs (neither calls the AI provider):
+
+```sh
+curl http://localhost:8080/api/dialogs/history
+curl http://localhost:8080/api/dialogs/history/06490fe2-1fe2-43a4-b14f-8f9f547a23a4
+```
+
+The list returns `[{"id":"...","createdTime":"...Z","topic":"..."}]`, or `[]`
+when empty. Details return `id`, `createdTime`, `topic`, `targetPhrase`, `scenario`,
+and ordered `dialogue` entries. Unknown or expired UUIDs return 404, malformed
+UUIDs return 400, and storage failures return 5xx. Reads use `Cache-Control: no-store`.
+
+Dialogue lines are stored as ordered JSON in a SQL TEXT column. A future PostgreSQL
+migration can reuse this representation and the API, but must add its driver,
+schema migration, and database-wide write locking if multiple processes write.
+The current singleton writer lock covers insertion, eviction, and commit in one
+transaction; it is scoped to this single-process application.
+
+Run tests using Java 25 with `mvn test` (or the wrapper if configured locally).
+For browser verification without an API key or paid AI calls, a test-only provider
+stub is available:
+
+```sh
+mvn spring-boot:test-run -Dspring-boot.run.main-class=com.matthung.ecospeak.BrowserTestApplication -Dspring-boot.run.arguments=--server.port=8081
+```
+
+This starts the real HTTP and H2 backend on port 8081; the stub uses the scenario
+as the topic and returns a fixed conversation. It is excluded from production builds.
+
 ## Earlier PRD
 
 The document below is retained as earlier product planning. Current MVP intent is
