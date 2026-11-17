@@ -29,7 +29,8 @@ import com.matthung.ecospeak.dto.DialogueLine;
 import com.matthung.ecospeak.dto.DialogueResponse;
 import com.matthung.ecospeak.service.DialogueService;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:history-tests;DB_CLOSE_DELAY=0;TRACE_LEVEL_FILE=0")
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:history-tests;DB_CLOSE_DELAY=0;TRACE_LEVEL_FILE=0",
+        "ecospeak.audio.directory=target/history-audio-tests"})
 class HistoryIntegrationTests {
     @Autowired HistoryService history;
     @Autowired JdbcTemplate jdbc;
@@ -37,6 +38,8 @@ class HistoryIntegrationTests {
     @Autowired HistoryController reads;
     @MockitoBean DialogueService provider;
     @MockitoSpyBean HistoryRepository repository;
+    @Autowired com.matthung.ecospeak.audio.AudioService audio;
+    @MockitoBean com.matthung.ecospeak.audio.SpeechProvider speech;
     MockMvc mvc;
 
     @BeforeEach void setup() {
@@ -149,5 +152,48 @@ class HistoryIntegrationTests {
         var id = history.save("scenario", content("topic"), Instant.now());
         jdbc.update("UPDATE dialogue_history SET dialogues = ? WHERE id = ?", "[]", id.toString());
         mvc.perform(get("/api/dialogs/history/" + id)).andExpect(status().is5xxServerError());
+    }
+
+    private void awaitAudio(UUID id) throws Exception {
+        long end = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < end) {
+            if ("ready".equals(audio.status(id).status())) return;
+            Thread.sleep(10);
+        }
+        fail("Audio did not become ready");
+    }
+
+    @Test void audioSurvivesRollbackAndExpiresOnlyAfterCommittedRetention() throws Exception {
+        when(speech.synthesize(anyString(), anyString(), any(), anyInt())).thenReturn(new byte[]{1,2});
+        var oldest = history.save("scenario", content("old"), Instant.EPOCH);
+        audio.prepare(oldest); awaitAudio(oldest); byte[] before = audio.read(oldest);
+        for (int i = 0; i < 9; i++) history.save("scenario", content("retained"), Instant.now());
+        doAnswer(call -> { call.callRealMethod(); throw new IllegalStateException("rollback"); }).when(repository).trim();
+        assertThrows(IllegalStateException.class, () -> history.save("scenario", content("failed"), Instant.now()));
+        assertArrayEquals(before, audio.read(oldest)); assertTrue(history.find(oldest).isPresent());
+        doCallRealMethod().when(repository).trim();
+        history.save("scenario", content("committed"), Instant.now());
+        assertEquals(10, history.list().size());
+        assertEquals(404, assertThrows(com.matthung.ecospeak.audio.AudioFailure.class, () -> audio.read(oldest)).status());
+        assertFalse(java.nio.file.Files.exists(java.nio.file.Path.of("target/history-audio-tests", oldest + ".wav")));
+    }
+
+    @Test void committedEvictionCancelsInFlightProviderAndNeverPublishes() throws Exception {
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var exited = new java.util.concurrent.CountDownLatch(1);
+        when(speech.synthesize(anyString(), anyString(), any(), anyInt())).thenAnswer(call -> {
+            entered.countDown();
+            try { release.await(); return new byte[]{1,2}; }
+            finally { exited.countDown(); }
+        });
+        var oldest = history.save("scenario", content("old"), Instant.EPOCH);
+        try {
+            audio.prepare(oldest); assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            for (int i = 0; i < 10; i++) history.save("scenario", content("new"), Instant.now());
+            assertTrue(exited.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            assertFalse(java.nio.file.Files.exists(java.nio.file.Path.of("target/history-audio-tests", oldest + ".wav")));
+            assertEquals(404, assertThrows(com.matthung.ecospeak.audio.AudioFailure.class, () -> audio.status(oldest)).status());
+        } finally { release.countDown(); }
     }
 }

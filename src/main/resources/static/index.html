@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>EcoSpeak</title>
+    <link rel="stylesheet" href="dialogue-audio.css">
 
     <style>
         body {
@@ -117,10 +118,17 @@
         <div id="targetPhrase"></div>
     </div>
 
+    <div class="audio-controls" aria-label="Dialogue audio">
+        <button id="audioPlay" type="button" disabled>Play</button>
+        <button id="audioRetry" type="button" hidden>Retry audio</button>
+        <span class="audio-disclosure">AI-generated voices</span>
+        <p id="audioStatus" class="audio-status" role="status" aria-live="polite"></p>
+    </div>
     <div id="dialogue"></div>
 
 </div>
 
+<script src="dialogue-audio.js"></script>
 <script>
     async function generateDialogue() {
 
@@ -211,6 +219,7 @@
 
             button.textContent = 'Generate Another';
             document.getElementById('saveWarning').classList.toggle('hidden', data.historySaved !== false);
+            window.dialogueAudio.set(data.historySaved === true ? data.historyId : null, true);
 
         } catch (e) {
 

@@ -1,5 +1,7 @@
 # EcoSpeak
 
+Dialogue playback is described in [Dialogue audio](docs/dialogue-audio.md), including automatic preparation, disabled-until-ready Play, provider configuration, API usage, cache lifetime, and the user-owned manual acceptance checklist.
+
 ## Using the practice page
 
 1. Open the home page and enter a scenario, such as `Ordering coffee`.

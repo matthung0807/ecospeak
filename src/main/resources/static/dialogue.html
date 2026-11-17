@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Saved dialogue – EcoSpeak</title>
     <link rel="stylesheet" href="history.css">
+    <link rel="stylesheet" href="dialogue-audio.css">
 </head>
 <body>
 <nav>
@@ -17,8 +18,15 @@
 <section id="result" class="hidden">
     <h2 id="topic"></h2>
     <div class="target-phrase"><strong>Target Phrase</strong><div id="targetPhrase"></div></div>
+    <div class="audio-controls" aria-label="Dialogue audio">
+        <button id="audioPlay" type="button" disabled>Play</button>
+        <button id="audioRetry" type="button" hidden>Retry audio</button>
+        <span class="audio-disclosure">AI-generated voices</span>
+        <p id="audioStatus" class="audio-status" role="status" aria-live="polite"></p>
+    </div>
     <div id="dialogue"></div>
 </section>
+<script src="dialogue-audio.js"></script>
 <script>
     async function loadDialogue() {
         const status = document.getElementById('status');
@@ -60,6 +68,7 @@
             document.getElementById('dialogue').replaceChildren(fragment);
             document.getElementById('result').classList.remove('hidden');
             status.textContent = '';
+            window.dialogueAudio.set(id, false);
         } catch (exception) {
             status.textContent = '';
             error.textContent = 'Could not load dialogue. Please try again.';

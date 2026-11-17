@@ -22,6 +22,7 @@ public class HistoryService {
     private final JsonMapper mapper;
     private final TransactionTemplate transaction;
     private final Object writerLock = new Object();
+    private final java.util.List<java.util.function.Consumer<List<UUID>>> evictionListeners = new java.util.ArrayList<>();
 
     public HistoryService(HistoryRepository repository, JsonMapper mapper, PlatformTransactionManager manager) {
         this.repository = repository;
@@ -37,15 +38,33 @@ public class HistoryService {
         UUID id = UUID.randomUUID();
         // Hold the lock through commit, not merely until the transactional method returns.
         synchronized (writerLock) {
-            transaction.executeWithoutResult(status -> {
+            List<UUID> evicted = transaction.execute(status -> {
                 repository.insert(id, time, scenario, response, json);
-                repository.trim();
+                return repository.trim();
             });
+            // Commit has succeeded. Cache cleanup must never change the outcome of a text save.
+            if (evicted != null && !evicted.isEmpty()) {
+                for (var listener : evictionListeners) {
+                    try { listener.accept(evicted); }
+                    catch (RuntimeException failure) {
+                        org.slf4j.LoggerFactory.getLogger(HistoryService.class).warn("Audio eviction cleanup deferred ({})", failure.getClass().getSimpleName());
+                    }
+                }
+            }
         }
         return id;
     }
 
     public List<HistorySummary> list() { return repository.list(); }
+
+    /** Short lifecycle operations only: never make provider calls while holding this lock. */
+    public <T> T coordinated(java.util.function.Supplier<T> operation) {
+        synchronized (writerLock) { return operation.get(); }
+    }
+
+    public void onEviction(java.util.function.Consumer<List<UUID>> listener) {
+        synchronized (writerLock) { evictionListeners.add(listener); }
+    }
 
     public Optional<HistoryDetail> find(UUID id) {
         return repository.find(id).map(stored -> {

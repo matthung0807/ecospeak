@@ -21,11 +21,12 @@ public class HistoryRepository {
                 id.toString(), time.atOffset(ZoneOffset.UTC), response.getTopic(), response.getTargetPhrase(), scenario, json);
     }
 
-    public void trim() {
+    public List<UUID> trim() {
         var ids = jdbc.queryForList("SELECT id FROM dialogue_history ORDER BY created_time DESC, id DESC", String.class);
         for (int i = 10; i < ids.size(); i++) {
             jdbc.update("DELETE FROM dialogue_history WHERE id = ?", ids.get(i));
         }
+        return ids.stream().skip(10).map(UUID::fromString).toList();
     }
 
     public List<HistorySummary> list() {

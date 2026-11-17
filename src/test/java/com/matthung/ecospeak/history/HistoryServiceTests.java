@@ -10,6 +10,30 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.json.JsonMapper;
 
 class HistoryServiceTests {
+    @Test void cacheCleanupFailureCannotReportCommittedHistoryAsUnsaved() {
+        var repository = mock(HistoryRepository.class);
+        var manager = mock(PlatformTransactionManager.class);
+        var status = new SimpleTransactionStatus();
+        when(manager.getTransaction(any())).thenReturn(status);
+        var evicted = java.util.UUID.randomUUID();
+        when(repository.trim()).thenReturn(java.util.List.of(evicted));
+        var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
+        service.onEviction(ids -> { verify(manager).commit(status); assertEquals(java.util.List.of(evicted), ids); throw new IllegalStateException("cache unavailable"); });
+        assertNotNull(service.save("scenario", HistoryIntegrationTests.content("topic"), Instant.now()));
+    }
+
+    @Test void commitFailureDoesNotNotifyEvictionListeners() {
+        var repository = mock(HistoryRepository.class);
+        var manager = mock(PlatformTransactionManager.class);
+        when(manager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        when(repository.trim()).thenReturn(java.util.List.of(java.util.UUID.randomUUID()));
+        doThrow(new TransactionSystemException("commit failed")).when(manager).commit(any());
+        var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
+        var called = new java.util.concurrent.atomic.AtomicBoolean();
+        service.onEviction(ids -> called.set(true));
+        assertThrows(TransactionSystemException.class, () -> service.save("scenario", HistoryIntegrationTests.content("topic"), Instant.now()));
+        assertFalse(called.get());
+    }
     @Test void serializationFailureDoesNotBeginTransactionOrChangeStorage() {
         var repository = mock(HistoryRepository.class);
         var mapper = mock(JsonMapper.class);
