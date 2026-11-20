@@ -15,12 +15,22 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionSystemException;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.json.JsonMapper;
 
 class HistoryServiceTests {
+    private HistoryTransaction transaction(
+            HistoryRepository repository, PlatformTransactionManager manager) {
+        var factory = new ProxyFactory(new HistoryTransaction(repository));
+        factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
+        return (HistoryTransaction) factory.getProxy();
+    }
+
     @Test
     void cacheCleanupFailureCannotReportCommittedHistoryAsUnsaved() {
         var repository = mock(HistoryRepository.class);
@@ -29,7 +39,7 @@ class HistoryServiceTests {
         when(manager.getTransaction(any())).thenReturn(status);
         var evicted = java.util.UUID.randomUUID();
         when(repository.trim()).thenReturn(java.util.List.of(evicted));
-        var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
+        var service = new HistoryService(repository, JsonMapper.builder().build(), transaction(repository, manager));
         service.onEviction(
                 ids -> {
                     verify(manager).commit(status);
@@ -47,7 +57,7 @@ class HistoryServiceTests {
         when(manager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         when(repository.trim()).thenReturn(java.util.List.of(java.util.UUID.randomUUID()));
         doThrow(new TransactionSystemException("commit failed")).when(manager).commit(any());
-        var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
+        var service = new HistoryService(repository, JsonMapper.builder().build(), transaction(repository, manager));
         var called = new java.util.concurrent.atomic.AtomicBoolean();
         service.onEviction(ids -> called.set(true));
         assertThrows(
@@ -64,7 +74,7 @@ class HistoryServiceTests {
         var repository = mock(HistoryRepository.class);
         var mapper = mock(JsonMapper.class);
         var manager = mock(PlatformTransactionManager.class);
-        var service = new HistoryService(repository, mapper, manager);
+        var service = new HistoryService(repository, mapper, transaction(repository, manager));
         when(mapper.writeValueAsString(any()))
                 .thenThrow(new IllegalArgumentException("serialization failed"));
         assertThrows(
@@ -85,7 +95,7 @@ class HistoryServiceTests {
         doThrow(new IllegalStateException("insert failed"))
                 .when(repository)
                 .insert(any(), any(), any(), any(), any());
-        var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
+        var service = new HistoryService(repository, JsonMapper.builder().build(), transaction(repository, manager));
         assertThrows(
                 IllegalStateException.class,
                 () -> service.save(
@@ -104,7 +114,7 @@ class HistoryServiceTests {
         var status = new SimpleTransactionStatus();
         when(manager.getTransaction(any())).thenReturn(status);
         doThrow(new TransactionSystemException("commit failed")).when(manager).commit(status);
-        var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
+        var service = new HistoryService(repository, JsonMapper.builder().build(), transaction(repository, manager));
         assertThrows(
                 TransactionSystemException.class,
                 () -> service.save(

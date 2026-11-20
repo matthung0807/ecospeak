@@ -8,9 +8,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -18,17 +15,15 @@ import tools.jackson.databind.json.JsonMapper;
 public class HistoryService {
     private final HistoryRepository repository;
     private final JsonMapper mapper;
-    private final TransactionTemplate transaction;
+    private final HistoryTransaction transaction;
     private final Object writerLock = new Object();
     private final java.util.List<java.util.function.Consumer<List<UUID>>> evictionListeners = new java.util.ArrayList<>();
 
     public HistoryService(
-            HistoryRepository repository, JsonMapper mapper, PlatformTransactionManager manager) {
+            HistoryRepository repository, JsonMapper mapper, HistoryTransaction transaction) {
         this.repository = repository;
         this.mapper = mapper;
-        transaction = new TransactionTemplate(manager);
-        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.transaction = transaction;
     }
 
     public UUID save(String scenario, DialogueResponse response, Instant time) {
@@ -47,13 +42,8 @@ public class HistoryService {
         // Hold the lock through commit, not merely until the transactional method
         // returns.
         synchronized (writerLock) {
-            List<UUID> evicted = transaction.execute(
-                    status -> {
-                        repository.insert(id, time, scenario, response, json);
-                        var removed = repository.trim();
-                        beforeCommit.accept(id);
-                        return removed;
-                    });
+            List<UUID> evicted =
+                    transaction.save(id, time, scenario, response, json, beforeCommit);
             // Commit has succeeded. Cache cleanup must never change the outcome of a text
             // save.
             if (evicted != null && !evicted.isEmpty()) {

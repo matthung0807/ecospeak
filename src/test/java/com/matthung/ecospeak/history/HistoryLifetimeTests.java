@@ -10,14 +10,17 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 import tools.jackson.databind.json.JsonMapper;
 
 class HistoryLifetimeTests {
@@ -25,7 +28,12 @@ class HistoryLifetimeTests {
     Path directory;
 
     @TestConfiguration(proxyBeanMethods = false)
-    @Import({ HistoryService.class, HistoryRepository.class })
+    @EnableAutoConfiguration
+    @EntityScan("com.matthung.ecospeak.entity")
+    @EnableJpaRepositories("com.matthung.ecospeak.repository")
+    @EnableTransactionManagement
+    @PropertySource("classpath:lifetime-test.properties")
+    @Import({ HistoryService.class, HistoryRepository.class, HistoryTransaction.class })
     static class StorageContext {
         @Bean(destroyMethod = "close")
         HikariDataSource dataSource() throws Exception {
@@ -40,18 +48,12 @@ class HistoryLifetimeTests {
                             .replace("mem:ecospeak", "mem:lifetime-test"));
             datasource.setUsername("sa");
             datasource.setPassword("");
-            new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(datasource);
             return datasource;
         }
 
         @Bean
         JdbcTemplate jdbc(HikariDataSource datasource) {
             return new JdbcTemplate(datasource);
-        }
-
-        @Bean
-        DataSourceTransactionManager transactions(HikariDataSource datasource) {
-            return new DataSourceTransactionManager(datasource);
         }
 
         @Bean

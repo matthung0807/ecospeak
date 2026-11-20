@@ -1,71 +1,59 @@
 package com.matthung.ecospeak.history;
 
 import com.matthung.ecospeak.dto.DialogueResponse;
+import com.matthung.ecospeak.entity.DialogueHistoryEntity;
+import com.matthung.ecospeak.repository.DialogueHistoryJpaRepository;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
-@Repository
+@Component
 public class HistoryRepository {
-    private final JdbcTemplate jdbc;
+    private final DialogueHistoryJpaRepository repository;
 
-    public HistoryRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+    public HistoryRepository(DialogueHistoryJpaRepository repository) {
+        this.repository = repository;
     }
 
     public void insert(
             UUID id, Instant time, String scenario, DialogueResponse response, String json) {
-        jdbc.update(
-                "INSERT INTO dialogue_history (id, created_time, topic, target_phrase, scenario,"
-                        + " dialogues) VALUES (?, ?, ?, ?, ?, ?)",
-                id.toString(),
-                time.atOffset(ZoneOffset.UTC),
-                response.getTopic(),
-                response.getTargetPhrase(),
-                scenario,
-                json);
+        var row = new DialogueHistoryEntity();
+        row.setId(id.toString());
+        row.setCreatedTime(time.atOffset(ZoneOffset.UTC));
+        row.setTopic(response.getTopic());
+        row.setTargetPhrase(response.getTargetPhrase());
+        row.setScenario(scenario);
+        row.setDialogues(json);
+        repository.saveAndFlush(row);
     }
 
     public List<UUID> trim() {
-        var ids = jdbc.queryForList(
-                "SELECT id FROM dialogue_history ORDER BY created_time DESC, id DESC",
-                String.class);
-        for (int i = 10; i < ids.size(); i++) {
-            jdbc.update("DELETE FROM dialogue_history WHERE id = ?", ids.get(i));
-        }
-        return ids.stream().skip(10).map(UUID::fromString).toList();
+        var rows = repository.findAllByOrderByCreatedTimeDescIdDesc();
+        var removed = rows.stream().skip(10).toList();
+        repository.deleteAll(removed);
+        return removed.stream().map(row -> UUID.fromString(row.getId())).toList();
     }
 
     public List<HistorySummary> list() {
-        return jdbc.query(
-                "SELECT id, created_time, topic FROM dialogue_history ORDER BY created_time DESC,"
-                        + " id DESC",
-                (rs, row) -> new HistorySummary(
-                        UUID.fromString(rs.getString("id")),
-                        rs.getObject("created_time", OffsetDateTime.class).toInstant(),
-                        rs.getString("topic")));
+        return repository.findAllByOrderByCreatedTimeDescIdDesc().stream()
+                .map(row -> new HistorySummary(
+                        UUID.fromString(row.getId()),
+                        row.getCreatedTime().toInstant(),
+                        row.getTopic()))
+                .toList();
     }
 
     public Optional<StoredDialogue> find(UUID id) {
-        return jdbc
-                .query(
-                        "SELECT * FROM dialogue_history WHERE id = ?",
-                        (rs, row) -> new StoredDialogue(
-                                UUID.fromString(rs.getString("id")),
-                                rs.getObject("created_time", OffsetDateTime.class)
-                                        .toInstant(),
-                                rs.getString("topic"),
-                                rs.getString("target_phrase"),
-                                rs.getString("scenario"),
-                                rs.getString("dialogues")),
-                        id.toString())
-                .stream()
-                .findFirst();
+        return repository.findById(id.toString()).map(row -> new StoredDialogue(
+                UUID.fromString(row.getId()),
+                row.getCreatedTime().toInstant(),
+                row.getTopic(),
+                row.getTargetPhrase(),
+                row.getScenario(),
+                row.getDialogues()));
     }
 
     public record StoredDialogue(

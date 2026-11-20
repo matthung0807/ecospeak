@@ -3,16 +3,12 @@ package com.matthung.ecospeak.history;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.startsWith;
 import static org.mockito.Mockito.when;
 
 import com.matthung.ecospeak.quota.QuotaCalendar;
-import com.matthung.ecospeak.quota.QuotaProperties;
 import com.matthung.ecospeak.quota.QuotaService;
+import com.matthung.ecospeak.quota.QuotaTransaction;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -24,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -37,10 +34,10 @@ class QuotaIntegrationTests {
     PlatformTransactionManager manager;
     @Autowired
     QuotaCalendar calendar;
-    @Autowired
-    QuotaProperties properties;
     @MockitoBean
     Clock clock;
+    @MockitoSpyBean
+    QuotaTransaction transaction;
 
     @BeforeEach
     void setup() {
@@ -99,24 +96,24 @@ class QuotaIntegrationTests {
 
     @Test
     void failedReleaseIsRetriedBeforeNextAdmission() {
-        JdbcTemplate flaky = spy(jdbc);
-        var service = new QuotaService(flaky, manager, calendar, properties);
-        var first = service.admit("key", "scenario");
+        var first = quota.admit("key", "scenario");
         doThrow(new org.springframework.dao.DataAccessResourceFailureException("offline"))
-                .when(flaky)
-                .update(
-                        startsWith("UPDATE dialogue_generation_request SET state='failed'"),
-                        any(Object[].class));
-        service.release(first.attempt());
-        doCallRealMethod()
-                .when(flaky)
-                .update(
-                        startsWith("UPDATE dialogue_generation_request SET state='failed'"),
-                        any(Object[].class));
-        var second = service.admit("key", "scenario");
+                .when(transaction).release(first.attempt());
+        quota.release(first.attempt());
+        var second = quota.admit("key", "scenario");
         assertEquals("reserved", second.outcome());
         assertNotEquals(first.attempt().token(), second.attempt().token());
-        assertEquals(1, service.snapshot().daily().reserved());
+        assertEquals(1, quota.snapshot().daily().reserved());
+    }
+
+    @Test
+    void admissionFailsWhenQuotaLockRowIsMissing() {
+        jdbc.update("DELETE FROM dialogue_quota_lock WHERE id = 1");
+        try {
+            assertThrows(IllegalStateException.class, () -> quota.admit(null, "scenario"));
+        } finally {
+            jdbc.update("INSERT INTO dialogue_quota_lock (id) VALUES (1)");
+        }
     }
 
     @Test
