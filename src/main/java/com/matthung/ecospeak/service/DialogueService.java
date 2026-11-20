@@ -1,13 +1,12 @@
 package com.matthung.ecospeak.service;
 
-import org.springframework.stereotype.Service;
-
 import com.matthung.ecospeak.dto.DialogueResponse;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.StructuredResponse;
 import com.openai.models.responses.StructuredResponseCreateParams;
+import org.springframework.stereotype.Service;
 
 @Service
 public class DialogueService {
@@ -24,7 +23,8 @@ public class DialogueService {
 
     public DialogueResponse generate(String scenario) {
 
-        String prompt = """
+        String prompt =
+                """
                 You are an expert English language coach focusing on
                 authentic everyday conversation for upper-intermediate learners.
 
@@ -44,12 +44,13 @@ public class DialogueService {
                 9. Give the scenario a short descriptive topic.
                 """;
 
-        StructuredResponseCreateParams<DialogueResponse> params = ResponseCreateParams.builder()
-                .model("gpt-5.6-terra")
-                .instructions(prompt)
-                .input(scenario)
-                .text(DialogueResponse.class)
-                .build();
+        StructuredResponseCreateParams<DialogueResponse> params =
+                ResponseCreateParams.builder()
+                        .model("gpt-5.6-terra")
+                        .instructions(prompt)
+                        .input(scenario)
+                        .text(DialogueResponse.class)
+                        .build();
 
         StructuredResponse<DialogueResponse> response = client.responses().create(params);
 
@@ -58,8 +59,7 @@ public class DialogueService {
                 .flatMap(message -> message.content().stream())
                 .flatMap(content -> content.outputText().stream())
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "OpenAI returned no dialogue response"));
+                .orElseThrow(
+                        () -> new IllegalStateException("OpenAI returned no dialogue response"));
     }
-
 }

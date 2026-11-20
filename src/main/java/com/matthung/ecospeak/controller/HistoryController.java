@@ -1,5 +1,6 @@
 package com.matthung.ecospeak.controller;
 
+import com.matthung.ecospeak.history.HistoryService;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -8,20 +9,24 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.matthung.ecospeak.history.HistoryService;
 
 @RestController
 @RequestMapping("/api/dialogs/history")
 public class HistoryController {
     private final HistoryService history;
-    public HistoryController(HistoryService history) { this.history = history; }
+
+    public HistoryController(HistoryService history) {
+        this.history = history;
+    }
 
     @GetMapping
     public ResponseEntity<?> list() {
         try {
             return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(history.list());
         } catch (RuntimeException exception) {
-            return ResponseEntity.internalServerError().cacheControl(CacheControl.noStore()).build();
+            return ResponseEntity.internalServerError()
+                    .cacheControl(CacheControl.noStore())
+                    .build();
         }
     }
 
@@ -32,10 +37,20 @@ public class HistoryController {
         }
         try {
             var record = history.find(UUID.fromString(id));
-            return record.<ResponseEntity<?>>map(value -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value))
-                    .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).cacheControl(CacheControl.noStore()).build());
+            return record.<ResponseEntity<?>>map(
+                            value ->
+                                    ResponseEntity.ok()
+                                            .cacheControl(CacheControl.noStore())
+                                            .body(value))
+                    .orElseGet(
+                            () ->
+                                    ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                            .cacheControl(CacheControl.noStore())
+                                            .build());
         } catch (RuntimeException exception) {
-            return ResponseEntity.internalServerError().cacheControl(CacheControl.noStore()).build();
+            return ResponseEntity.internalServerError()
+                    .cacheControl(CacheControl.noStore())
+                    .build();
         }
     }
 }

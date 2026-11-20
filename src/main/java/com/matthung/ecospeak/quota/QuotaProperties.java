@@ -1,7 +1,7 @@
 package com.matthung.ecospeak.quota;
 
-import java.time.ZoneId;
 import jakarta.annotation.PostConstruct;
+import java.time.ZoneId;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;

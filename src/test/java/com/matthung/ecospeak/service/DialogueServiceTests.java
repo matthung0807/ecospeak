@@ -1,14 +1,16 @@
 package com.matthung.ecospeak.service;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
-import java.util.List;
-import java.util.Optional;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.matthung.ecospeak.dto.DialogueResponse;
 import com.openai.client.OpenAIClient;
@@ -17,6 +19,10 @@ import com.openai.models.responses.StructuredResponseCreateParams;
 import com.openai.models.responses.StructuredResponseOutputItem;
 import com.openai.models.responses.StructuredResponseOutputMessage;
 import com.openai.services.blocking.ResponseService;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class DialogueServiceTests {
     @Test
@@ -26,8 +32,10 @@ class DialogueServiceTests {
         var responses = mock(ResponseService.class);
         when(client.responses()).thenReturn(responses);
         StructuredResponse<DialogueResponse> response = mock(StructuredResponse.class);
-        StructuredResponseOutputItem<DialogueResponse> item = mock(StructuredResponseOutputItem.class);
-        StructuredResponseOutputMessage<DialogueResponse> message = mock(StructuredResponseOutputMessage.class);
+        StructuredResponseOutputItem<DialogueResponse> item =
+                mock(StructuredResponseOutputItem.class);
+        StructuredResponseOutputMessage<DialogueResponse> message =
+                mock(StructuredResponseOutputMessage.class);
         StructuredResponseOutputMessage.Content<DialogueResponse> content =
                 mock(StructuredResponseOutputMessage.Content.class);
         var expected = new DialogueResponse();
@@ -46,12 +54,15 @@ class DialogueServiceTests {
         verify(responses, times(2)).create(requests.capture());
         var captured = requests.getAllValues();
         assertEquals("Ordering coffee", captured.get(0).rawParams().input().orElseThrow().asText());
-        assertEquals("Making an appointment", captured.get(1).rawParams().input().orElseThrow().asText());
+        assertEquals(
+                "Making an appointment",
+                captured.get(1).rawParams().input().orElseThrow().asText());
         for (var request : captured) {
             assertEquals(DialogueResponse.class, request.responseType());
             assertEquals("gpt-5.6-terra", request.rawParams().model().orElseThrow().asString());
             var instructions = request.rawParams().instructions().orElseThrow();
-            assertTrue(instructions.contains("Base the conversation on the user-provided scenario"));
+            assertTrue(
+                    instructions.contains("Base the conversation on the user-provided scenario"));
             assertTrue(instructions.contains("exactly two participants: A and B"));
             assertTrue(instructions.contains("4 to 5 dialogue lines"));
             assertTrue(instructions.contains("target phrase must appear naturally"));
@@ -70,8 +81,10 @@ class DialogueServiceTests {
         when(response.output()).thenReturn(List.of());
         when(responses.create(any(StructuredResponseCreateParams.class))).thenReturn(response);
 
-        var error = assertThrows(IllegalStateException.class,
-                () -> new DialogueService(client).generate("Ordering coffee"));
+        var error =
+                assertThrows(
+                        IllegalStateException.class,
+                        () -> new DialogueService(client).generate("Ordering coffee"));
         assertEquals("OpenAI returned no dialogue response", error.getMessage());
     }
 }

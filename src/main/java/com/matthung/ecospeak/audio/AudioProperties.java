@@ -1,11 +1,11 @@
 package com.matthung.ecospeak.audio;
 
+import jakarta.annotation.PostConstruct;
 import java.nio.file.Path;
 import java.time.Duration;
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
-import jakarta.annotation.PostConstruct;
-import lombok.Data;
 
 @Data
 @Component
@@ -24,12 +24,24 @@ public class AudioProperties {
 
     @PostConstruct
     public void validate() {
-        if (directory == null || model == null || !model.matches("[a-zA-Z0-9._-]+")
-                || voiceA == null || voiceA.isBlank() || voiceB == null || voiceB.isBlank()
-                || voiceA.equals(voiceB) || workers < 1 || pending < 1
-                || deadline == null || deadline.isNegative() || deadline.isZero()
-                || requestTimeout == null || requestTimeout.isNegative() || requestTimeout.isZero()
-                || maxInputCharacters < 1 || maxOutputBytes < 14446) {
+        if (directory == null
+                || model == null
+                || !model.matches("[a-zA-Z0-9._-]+")
+                || voiceA == null
+                || voiceA.isBlank()
+                || voiceB == null
+                || voiceB.isBlank()
+                || voiceA.equals(voiceB)
+                || workers < 1
+                || pending < 1
+                || deadline == null
+                || deadline.isNegative()
+                || deadline.isZero()
+                || requestTimeout == null
+                || requestTimeout.isNegative()
+                || requestTimeout.isZero()
+                || maxInputCharacters < 1
+                || maxOutputBytes < 14446) {
             throw new IllegalArgumentException("Invalid audio configuration");
         }
     }
