@@ -18,17 +18,23 @@ import com.matthung.ecospeak.dto.DialogueLine;
 import com.matthung.ecospeak.dto.DialogueResponse;
 import com.matthung.ecospeak.service.DialogueService;
 import com.matthung.ecospeak.history.HistoryService;
+import com.matthung.ecospeak.quota.QuotaService;
+import tools.jackson.databind.json.JsonMapper;
 
 class DialogueControllerTests {
     private DialogueService service;
     private MockMvc mvc;
     private HistoryService history;
+    private QuotaService quota;
 
     @BeforeEach
     void setUp() {
         service = mock(DialogueService.class);
         history = mock(HistoryService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new DialogueController(service, history)).build();
+        quota = mock(QuotaService.class);
+        when(quota.admit(any(), anyString())).thenReturn(new QuotaService.Admission("reserved", new QuotaService.Attempt("id", "token"), null, null));
+        when(history.save(anyString(), any(), any(), any())).thenReturn(java.util.UUID.randomUUID());
+        mvc = MockMvcBuilders.standaloneSetup(new DialogueController(service, history, quota, JsonMapper.builder().build())).build();
     }
 
     @Test
@@ -81,25 +87,23 @@ class DialogueControllerTests {
         var response = validResponse();
         var id = java.util.UUID.randomUUID();
         when(service.generate("Coffee")).thenReturn(response);
-        when(history.save(eq("Coffee"), same(response), any())).thenReturn(id);
+        when(history.save(eq("Coffee"), same(response), any(), any())).thenReturn(id);
         mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"scenario\":\"Coffee\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.historySaved").value(true))
                 .andExpect(jsonPath("$.historyId").value(id.toString()));
-        verify(history).save(eq("Coffee"), same(response), any());
+        verify(history).save(eq("Coffee"), same(response), any(), any());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"serialization", "insert", "cleanup", "commit"})
-    void storageFailurePreservesGeneratedContent(String stage) throws Exception {
+    void storageFailureDoesNotReturnGeneratedContent(String stage) throws Exception {
         when(service.generate("Coffee")).thenReturn(validResponse());
-        when(history.save(anyString(), any(), any())).thenThrow(new IllegalStateException(stage));
-        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"scenario\":\"Coffee\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.historySaved").value(false))
-                .andExpect(jsonPath("$.historyId").isEmpty())
-                .andExpect(jsonPath("$.topic").value("Coffee"))
-                .andExpect(jsonPath("$.dialogue[0].text").value("Hello"));
+        when(history.save(anyString(), any(), any(), any())).thenThrow(new IllegalStateException(stage));
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.servlet.ServletException.class, () ->
+            mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Coffee\"}")));
+        verify(quota).release(any());
     }
 
     @Test
@@ -119,5 +123,57 @@ class DialogueControllerTests {
             mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"scenario\":\"Coffee\"}")));
         verifyNoInteractions(history);
+    }
+
+    @Test void invalidIdempotencyKeysFailBeforeAdmission() throws Exception {
+        for (String key : List.of(" ", "x".repeat(129))) {
+            mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                    .header("Idempotency-Key", key).content("{\"scenario\":\"Coffee\"}"))
+                .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(quota, service);
+    }
+
+    @Test void storageFailureDoesNotInvokeProvider() throws Exception {
+        when(quota.admit(any(), anyString())).thenThrow(new IllegalStateException("offline"));
+        when(quota.snapshot()).thenThrow(new IllegalStateException("offline"));
+        mvc.perform(get("/api/dialogs/quota")).andExpect(status().isServiceUnavailable()).andExpect(header().string("Cache-Control", "no-store"));
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON).content("{\"scenario\":\"Coffee\"}"))
+            .andExpect(status().isServiceUnavailable());
+        verifyNoInteractions(service);
+    }
+
+    @Test void exhaustionReportsQuotaAndRetryAfter() throws Exception {
+        var reset = java.time.Instant.parse("2026-11-22T16:00:00Z");
+        var period = new QuotaService.Period(2, 1, 1, 0, reset);
+        var snapshot = new QuotaService.Snapshot("Asia/Taipei", period, period, reset, List.of("daily", "weekly"));
+        when(quota.snapshot()).thenReturn(snapshot);
+        when(quota.admit(any(), anyString())).thenReturn(new QuotaService.Admission("dialogue_quota_exceeded", null, null, snapshot));
+        when(quota.retryAfter(snapshot)).thenReturn(60L);
+        mvc.perform(get("/api/dialogs/quota")).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.daily.reserved").value(1));
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON).content("{\"scenario\":\"Coffee\"}"))
+            .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "60"))
+            .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.quota.exhaustedPeriods.length()").value(2));
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"daily", "weekly", "both", "reserved"})
+    void exhaustionReflectsEachBlockingPeriod(String kind) throws Exception {
+        var reset = java.time.Instant.parse("2026-11-22T16:00:00Z");
+        var available = new QuotaService.Period(10, 0, 0, 10, reset);
+        var used = new QuotaService.Period(2, 2, 0, 0, reset);
+        var reserved = new QuotaService.Period(2, 0, 2, 0, reset);
+        var day = kind.equals("weekly") ? available : kind.equals("reserved") ? reserved : used;
+        var week = kind.equals("weekly") || kind.equals("both") ? used : available;
+        var exhausted = kind.equals("both") ? List.of("daily", "weekly") : List.of(kind.equals("weekly") ? "weekly" : "daily");
+        var snapshot = new QuotaService.Snapshot("Asia/Taipei", day, week, reset, exhausted);
+        when(quota.admit(any(), anyString())).thenReturn(new QuotaService.Admission("dialogue_quota_exceeded", null, null, snapshot));
+        when(quota.retryAfter(snapshot)).thenReturn(1L);
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON).content("{\"scenario\":\"Coffee\"}"))
+            .andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.quota.exhaustedPeriods[0]").value(exhausted.getFirst()))
+            .andExpect(jsonPath("$.quota.daily.reserved").value(day.reserved()));
+        verifyNoInteractions(service);
     }
 }

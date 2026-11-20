@@ -318,3 +318,23 @@ MVP v1.1 暫不設定 D7 留存率等量化目標。
 - **成功指標：** 經過初期實際使用後，哪些行為最適合作為後續版本的量化成功指標？
 
 以上事項可依課程進度、技術可行性及使用者測試結果逐步確認。
+# Dialogue generation quota configuration
+
+The generation quota defaults to two dialogues per calendar day and ten per
+calendar week in `Asia/Taipei`. Configure `ecospeak.quota.daily-limit`,
+`ecospeak.quota.weekly-limit`, and `ecospeak.quota.timezone` using Spring Boot
+configuration. Limits must be positive and the timezone must be a valid Java
+time zone ID. Days reset at local midnight and weeks at Monday midnight.
+The existing in-memory database is cleared on application restart, including
+history and quota state.
+
+`GET /api/dialogs/quota` returns the configured timezone and daily and weekly
+`limit`, `used`, `reserved`, `remaining`, and `resetsAt` values, plus
+`nextAvailableAt` and `exhaustedPeriods`. Quota responses use `Cache-Control:
+no-store`. Generation can include an `Idempotency-Key` header (1–128 nonblank
+characters) to recover a result without consuming another allowance. A pending
+duplicate returns 409 `generation_in_progress` with `Retry-After`; a key used
+for another scenario returns 409 `idempotency_conflict`. Exhaustion returns
+429 `dialogue_quota_exceeded`, the quota snapshot, and `Retry-After` seconds.
+Quota storage failures return 503. A successful generation now always saves
+history: a save failure returns an error instead of unsaved generated content.

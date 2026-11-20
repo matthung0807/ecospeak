@@ -91,15 +91,14 @@
 <input id="scenario" type="text" placeholder="Ordering coffee"
        aria-describedby="error">
 
-<button id="generateButton" onclick="generateDialogue()">
+<div id="quotaStatus" role="status">Loading generation allowance...</div>
+<button id="quotaRetry" class="hidden" type="button" onclick="refreshQuota()">Retry allowance</button>
+<button id="recoverButton" class="hidden" type="button" onclick="recoverPending()">Recover pending result</button>
+<button id="generateButton" onclick="generateDialogue()" disabled>
     Generate Dialogue
 </button>
 
 <button id="historyButton" onclick="location.href='history.html'">History</button>
-
-<div id="saveWarning" class="hidden" role="status" style="margin-top:20px;color:#805500">
-    Dialogue generated, but could not be saved to history.
-</div>
 
 <div id="loading" class="hidden">
     Generating...
@@ -130,14 +129,37 @@
 
 <script src="dialogue-audio.js"></script>
 <script>
-    async function generateDialogue() {
+    let quota = null, busy = false, resetTimer;
+    const pendingKey = 'ecospeak.pendingGeneration';
+    function pending() { try { return JSON.parse(sessionStorage.getItem(pendingKey)); } catch (_) { return null; } }
+    function showPending() { document.getElementById('recoverButton').classList.toggle('hidden', !pending()); }
+    function updateButton() { document.getElementById('generateButton').disabled = busy || !quota || !quota.daily.remaining || !quota.weekly.remaining; document.getElementById('recoverButton').disabled = busy; }
+    function displayQuota(value) {
+        quota = value;
+        const reservation = value.daily.reserved || value.weekly.reserved ? ` Reservations: ${value.daily.reserved} today, ${value.weekly.reserved} this week.` : '';
+        const reset = value.nextAvailableAt ? ` Available again ${new Date(value.nextAvailableAt).toLocaleString(undefined, {timeZone: value.timezone})} (${value.timezone}).` : '';
+        document.getElementById('quotaStatus').textContent = `Today: ${value.daily.used} of ${value.daily.limit} used. This week: ${value.weekly.used} of ${value.weekly.limit} used.${reservation}${reset}`;
+        document.getElementById('quotaRetry').classList.add('hidden');
+        clearTimeout(resetTimer);
+        if (value.nextAvailableAt) resetTimer = setTimeout(refreshQuota, Math.min(2147483647, Math.max(1000, new Date(value.nextAvailableAt) - Date.now() + 100)));
+        updateButton();
+    }
+    async function refreshQuota() {
+        try { const response = await fetch('/api/dialogs/quota', {cache:'no-store'}); if (!response.ok) throw new Error('Quota unavailable'); displayQuota(await response.json()); }
+        catch (e) { quota = null; document.getElementById('quotaStatus').textContent = 'Could not load generation allowance.'; document.getElementById('quotaRetry').classList.remove('hidden'); updateButton(); }
+    }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshQuota(); });
+    document.getElementById('scenario').addEventListener('input', () => { const p = pending(); if (p && p.scenario !== document.getElementById('scenario').value.trim()) { sessionStorage.removeItem(pendingKey); showPending(); } });
+    async function recoverPending() { const p = pending(); if (p) { document.getElementById('scenario').value = p.scenario; await generateDialogue(p); } }
+    showPending(); refreshQuota();
+    async function generateDialogue(recovery = null) {
 
         const button = document.getElementById('generateButton');
         const loading = document.getElementById('loading');
         const error = document.getElementById('error');
         const result = document.getElementById('result');
 
-        if (button.disabled) {
+        if (busy || (!recovery && button.disabled)) {
             return;
         }
 
@@ -152,21 +174,38 @@
             return;
         }
 
-        button.disabled = true;
+        busy = true; updateButton();
         loading.classList.remove('hidden');
         error.classList.add('hidden');
-        document.getElementById('saveWarning').classList.add('hidden');
         scenarioInput.removeAttribute('aria-invalid');
+
+        const request = recovery || { key: crypto.randomUUID(), scenario };
+        sessionStorage.setItem(pendingKey, JSON.stringify(request)); showPending();
 
         try {
 
             const response = await fetch('/api/dialogs/generate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.key },
                 body: JSON.stringify({ scenario })
             });
 
+            if (response.status === 409) {
+                const payload = await response.json();
+                if (payload.code === 'generation_in_progress') {
+                    loading.textContent = 'Generation is still in progress...';
+                    await new Promise(resolve => setTimeout(resolve, Math.max(1, Number(response.headers.get('Retry-After')) || 1) * 1000));
+                    busy = false; return await generateDialogue(request);
+                }
+            }
+            if (response.status === 429) {
+                const payload = await response.json(); displayQuota(payload.quota);
+                sessionStorage.removeItem(pendingKey); showPending();
+                error.textContent = 'Generation allowance exhausted. See reset time above.'; error.classList.remove('hidden');
+                return;
+            }
             if (!response.ok) {
+                sessionStorage.removeItem(pendingKey); showPending();
                 throw new Error('Failed to generate dialogue');
             }
 
@@ -218,7 +257,7 @@
             result.classList.remove('hidden');
 
             button.textContent = 'Generate Another';
-            document.getElementById('saveWarning').classList.toggle('hidden', data.historySaved !== false);
+            sessionStorage.removeItem(pendingKey); showPending();
             window.dialogueAudio.set(data.historySaved === true ? data.historyId : null, true);
 
         } catch (e) {
@@ -231,7 +270,8 @@
         } finally {
 
             loading.classList.add('hidden');
-            button.disabled = false;
+            loading.textContent = 'Generating...'; busy = false; updateButton();
+            await refreshQuota();
         }
     }
 </script>

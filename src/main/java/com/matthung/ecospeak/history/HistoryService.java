@@ -33,6 +33,10 @@ public class HistoryService {
     }
 
     public UUID save(String scenario, DialogueResponse response, Instant time) {
+        return save(scenario, response, time, id -> {});
+    }
+
+    public UUID save(String scenario, DialogueResponse response, Instant time, java.util.function.Consumer<UUID> beforeCommit) {
         DialogueValidation.requireComplete(response);
         String json = mapper.writeValueAsString(response.getDialogue());
         UUID id = UUID.randomUUID();
@@ -40,7 +44,9 @@ public class HistoryService {
         synchronized (writerLock) {
             List<UUID> evicted = transaction.execute(status -> {
                 repository.insert(id, time, scenario, response, json);
-                return repository.trim();
+                var removed = repository.trim();
+                beforeCommit.accept(id);
+                return removed;
             });
             // Commit has succeeded. Cache cleanup must never change the outcome of a text save.
             if (evicted != null && !evicted.isEmpty()) {

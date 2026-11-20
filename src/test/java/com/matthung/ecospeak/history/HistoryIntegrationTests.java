@@ -38,13 +38,86 @@ class HistoryIntegrationTests {
     @Autowired HistoryController reads;
     @MockitoBean DialogueService provider;
     @MockitoSpyBean HistoryRepository repository;
+    @MockitoSpyBean com.matthung.ecospeak.quota.QuotaService quota;
     @Autowired com.matthung.ecospeak.audio.AudioService audio;
     @MockitoBean com.matthung.ecospeak.audio.SpeechProvider speech;
     MockMvc mvc;
 
     @BeforeEach void setup() {
         jdbc.update("DELETE FROM dialogue_history");
+        jdbc.update("DELETE FROM dialogue_generation_request");
         mvc = MockMvcBuilders.standaloneSetup(generation, reads).build();
+    }
+
+    @Test void idempotencyReplaysAfterExhaustionAndHistoryEviction() throws Exception {
+        when(provider.generate(anyString())).thenReturn(content("Coffee"));
+        var request = post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", "first").content("{\"scenario\":\"Coffee\"}");
+        String original = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Tea\"}")).andExpect(status().isOk());
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Third\"}")).andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("dialogue_quota_exceeded"));
+        jdbc.update("DELETE FROM dialogue_history");
+        String replay = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertEquals(original, replay);
+        verify(provider, times(2)).generate(anyString());
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", "first").content("{\"scenario\":\"Different\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("idempotency_conflict"));
+    }
+
+    @Test void pendingDuplicateDoesNotInvokeProviderAgain() throws Exception {
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        when(provider.generate("Coffee")).thenAnswer(call -> { entered.countDown(); release.await(); return content("Coffee"); });
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            var first = pool.submit(() -> mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                    .header("Idempotency-Key", "pending").content("{\"scenario\":\"Coffee\"}")).andExpect(status().isOk()));
+            try {
+                assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+                mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                    .header("Idempotency-Key", "pending").content("{\"scenario\":\"Coffee\"}"))
+                    .andExpect(status().isConflict()).andExpect(header().string("Retry-After", "1"))
+                    .andExpect(jsonPath("$.code").value("generation_in_progress"));
+                // Provider work must not hold either lock.
+                assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM dialogue_generation_request WHERE state='reserved'", Integer.class));
+                history.save("other", content("other"), Instant.now());
+            } finally { release.countDown(); }
+            first.get();
+        }
+        verify(provider, times(1)).generate("Coffee");
+    }
+
+    @Test void failedAttemptCanRetrySameKeyAndUnkeyedRequestsAreIndependent() throws Exception {
+        when(provider.generate("Coffee")).thenThrow(new IllegalStateException("provider failure"))
+                .thenReturn(content("Coffee"));
+        assertThrows(jakarta.servlet.ServletException.class, () -> mvc.perform(post("/api/dialogs/generate")
+                .contentType(MediaType.APPLICATION_JSON).header("Idempotency-Key", "retry")
+                .content("{\"scenario\":\"Coffee\"}")));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM dialogue_generation_request WHERE state='reserved'", Integer.class));
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON).header("Idempotency-Key", "retry")
+                .content("{\"scenario\":\"Coffee\"}")).andExpect(status().isOk());
+        mvc.perform(post("/api/dialogs/generate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"scenario\":\"Coffee\"}")).andExpect(status().isOk());
+        verify(provider, times(3)).generate("Coffee");
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM dialogue_generation_request WHERE state='succeeded'", Integer.class));
+    }
+
+    @Test void finalizationFailureRollsBackHistoryAndPreservesAudio() throws Exception {
+        when(speech.synthesize(anyString(), anyString(), any(), anyInt())).thenReturn(new byte[]{1, 2});
+        var oldest = history.save("scenario", content("old"), Instant.EPOCH);
+        audio.prepare(oldest); awaitAudio(oldest); byte[] beforeAudio = audio.read(oldest);
+        for (int i = 0; i < 9; i++) history.save("scenario", content("existing"), Instant.now());
+        var before = history.list();
+        when(provider.generate("Coffee")).thenReturn(content("new"));
+        doThrow(new IllegalStateException("finalization failed")).when(quota).finalizeAttempt(any(), any(), anyString());
+        assertThrows(jakarta.servlet.ServletException.class, () -> mvc.perform(post("/api/dialogs/generate")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"scenario\":\"Coffee\"}")));
+        assertEquals(before, history.list());
+        assertArrayEquals(beforeAudio, audio.read(oldest));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM dialogue_generation_request WHERE state IN ('reserved','succeeded')", Integer.class));
     }
 
     static DialogueResponse content(String topic) {

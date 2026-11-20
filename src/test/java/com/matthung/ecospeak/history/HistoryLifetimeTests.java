@@ -51,10 +51,12 @@ class HistoryLifetimeTests {
                 assertTrue(first.getBean(HikariDataSource.class).getJdbcUrl().startsWith("jdbc:h2:mem:"));
                 id = first.getBean(HistoryService.class).save("scenario", HistoryIntegrationTests.content("topic"), Instant.now());
                 assertTrue(first.getBean(HistoryService.class).find(id).isPresent());
+                first.getBean(JdbcTemplate.class).update("INSERT INTO dialogue_generation_request (id, scenario, reserved_at, daily_period_start, weekly_period_start, attempt_token, state) VALUES (?, 'scenario', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, 'succeeded')", UUID.randomUUID().toString(), UUID.randomUUID().toString());
             }
             try (var restarted = new AnnotationConfigApplicationContext(StorageContext.class)) {
                 assertTrue(restarted.getBean(HistoryService.class).list().isEmpty());
                 assertTrue(restarted.getBean(HistoryService.class).find(id).isEmpty());
+                assertEquals(0, restarted.getBean(JdbcTemplate.class).queryForObject("SELECT COUNT(*) FROM dialogue_generation_request", Integer.class));
             }
             try (var files = Files.list(directory)) { assertEquals(0, files.count()); }
         } finally { System.setProperty("user.dir", previous); }
