@@ -2,6 +2,7 @@
 (() => {
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const play = document.getElementById('audioPlay');
+    const speed = document.getElementById('audioSpeed');
     const retry = document.getElementById('audioRetry');
     const message = document.getElementById('audioStatus');
     let generation = 0;
@@ -41,6 +42,7 @@
         if (url !== expected) throw new Error('Invalid audio URL');
         const player = new Audio();
         player.preload = 'none';
+        player.playbackRate = Number(speed.value);
         player.src = url;
         media = player;
         player.addEventListener('play', () => {
@@ -100,6 +102,11 @@
         }
     }
 
+    speed.addEventListener('change', () => {
+        if (media) {
+            media.playbackRate = Number(speed.value);
+        }
+    });
     play.addEventListener('click', async () => {
         if (play.disabled || !media) return;
         const token = generation;

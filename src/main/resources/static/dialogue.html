@@ -20,6 +20,13 @@
     <div class="target-phrase"><strong>Target Phrase</strong><div id="targetPhrase"></div></div>
     <div class="audio-controls" aria-label="Dialogue audio">
         <button id="audioPlay" type="button" disabled>Play</button>
+        <label class="audio-speed" for="audioSpeed">Speed</label>
+        <select id="audioSpeed">
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+        </select>
         <button id="audioRetry" type="button" hidden>Retry audio</button>
         <span class="audio-disclosure">AI-generated voices</span>
         <p id="audioStatus" class="audio-status" role="status" aria-live="polite"></p>
