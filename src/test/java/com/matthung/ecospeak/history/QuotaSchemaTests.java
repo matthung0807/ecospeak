@@ -23,23 +23,20 @@ class QuotaSchemaTests {
                 }
                 sql.executeUpdate(
                         "INSERT INTO dialogue_history VALUES ('history', CURRENT_TIMESTAMP,"
-                            + " 'topic', 'phrase', 'scenario', '[]')");
-                String values =
-                        "'request', 'key', 'scenario', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,"
-                            + " CURRENT_TIMESTAMP, 'attempt', 'succeeded', 'history', '{}'";
+                                + " 'topic', 'phrase', 'scenario', '[]')");
+                String values = "'request', 'key', 'scenario', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,"
+                        + " CURRENT_TIMESTAMP, 'attempt', 'succeeded', 'history', '{}'";
                 sql.executeUpdate(
                         "INSERT INTO dialogue_generation_request VALUES (" + values + ")");
                 assertThrows(
                         java.sql.SQLException.class,
-                        () ->
-                                sql.executeUpdate(
-                                        "INSERT INTO dialogue_generation_request VALUES ('other',"
-                                            + " 'key', 'scenario', CURRENT_TIMESTAMP,"
-                                            + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'attempt',"
-                                            + " 'reserved', NULL, NULL)"));
+                        () -> sql.executeUpdate(
+                                "INSERT INTO dialogue_generation_request VALUES ('other',"
+                                        + " 'key', 'scenario', CURRENT_TIMESTAMP,"
+                                        + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'attempt',"
+                                        + " 'reserved', NULL, NULL)"));
                 sql.executeUpdate("DELETE FROM dialogue_history");
-                try (var rows =
-                        sql.executeQuery("SELECT COUNT(*) FROM dialogue_generation_request")) {
+                try (var rows = sql.executeQuery("SELECT COUNT(*) FROM dialogue_generation_request")) {
                     assertTrue(rows.next());
                     assertEquals(1, rows.getInt(1));
                 }
@@ -48,8 +45,7 @@ class QuotaSchemaTests {
         try (var connection = DriverManager.getConnection(url, "sa", "")) {
             ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
             try (var sql = connection.createStatement();
-                    var rows =
-                            sql.executeQuery("SELECT COUNT(*) FROM dialogue_generation_request")) {
+                    var rows = sql.executeQuery("SELECT COUNT(*) FROM dialogue_generation_request")) {
                 assertTrue(rows.next());
                 assertEquals(0, rows.getInt(1));
             }

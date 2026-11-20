@@ -86,11 +86,9 @@ class QuotaIntegrationTests {
         var tx = new TransactionTemplate(manager);
         assertThrows(
                 IllegalStateException.class,
-                () ->
-                        tx.executeWithoutResult(
-                                s ->
-                                        quota.finalizeAttempt(
-                                                first.attempt(), UUID.randomUUID(), "old")));
+                () -> tx.executeWithoutResult(
+                        s -> quota.finalizeAttempt(
+                                first.attempt(), UUID.randomUUID(), "old")));
         tx.executeWithoutResult(
                 s -> quota.finalizeAttempt(second.attempt(), UUID.randomUUID(), "snapshot"));
         assertEquals(1, quota.snapshot().daily().used());
@@ -128,8 +126,8 @@ class QuotaIntegrationTests {
             Instant day = i < 2 ? p.dailyStart() : p.dailyStart().minusSeconds(86400);
             jdbc.update(
                     "INSERT INTO dialogue_generation_request (id, scenario, reserved_at,"
-                        + " daily_period_start, weekly_period_start, attempt_token, state) VALUES"
-                        + " (?, 's', ?, ?, ?, ?, 'succeeded')",
+                            + " daily_period_start, weekly_period_start, attempt_token, state) VALUES"
+                            + " (?, 's', ?, ?, ?, ?, 'succeeded')",
                     UUID.randomUUID().toString(),
                     p.capturedAt().atOffset(ZoneOffset.UTC),
                     day.atOffset(ZoneOffset.UTC),
@@ -156,13 +154,13 @@ class QuotaIntegrationTests {
         assertEquals(java.util.List.of("daily"), quota.snapshot().exhaustedPeriods());
         jdbc.update(
                 "UPDATE dialogue_generation_request SET daily_period_start=? WHERE"
-                    + " state='reserved'",
+                        + " state='reserved'",
                 p.dailyStart().minusSeconds(86400).atOffset(ZoneOffset.UTC));
         for (int i = 0; i < 8; i++) {
             jdbc.update(
                     "INSERT INTO dialogue_generation_request (id, scenario, reserved_at,"
-                        + " daily_period_start, weekly_period_start, attempt_token, state) VALUES"
-                        + " (?, 's', ?, ?, ?, ?, 'succeeded')",
+                            + " daily_period_start, weekly_period_start, attempt_token, state) VALUES"
+                            + " (?, 's', ?, ?, ?, ?, 'succeeded')",
                     UUID.randomUUID().toString(),
                     p.capturedAt().atOffset(ZoneOffset.UTC),
                     p.dailyStart().minusSeconds(86400).atOffset(ZoneOffset.UTC),

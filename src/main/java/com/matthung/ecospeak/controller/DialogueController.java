@@ -92,17 +92,15 @@ public class DialogueController {
         try {
             var response = dialogueService.generate(scenario);
             DialogueValidation.requireComplete(response);
-            UUID id =
-                    history.save(
-                            scenario,
-                            response,
-                            Instant.now(),
-                            saved ->
-                                    quota.finalizeAttempt(
-                                            admission.attempt(),
-                                            saved,
-                                            mapper.writeValueAsString(
-                                                    GenerationResponse.of(response, saved))));
+            UUID id = history.save(
+                    scenario,
+                    response,
+                    Instant.now(),
+                    saved -> quota.finalizeAttempt(
+                            admission.attempt(),
+                            saved,
+                            mapper.writeValueAsString(
+                                    GenerationResponse.of(response, saved))));
             return ResponseEntity.ok(GenerationResponse.of(response, id));
         } catch (RuntimeException exception) {
             quota.release(admission.attempt());

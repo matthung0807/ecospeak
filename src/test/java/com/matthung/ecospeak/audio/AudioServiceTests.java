@@ -55,13 +55,11 @@ class AudioServiceTests {
                 .thenAnswer(call -> Optional.ofNullable(records.get(call.getArgument(0))));
         when(history.list())
                 .thenAnswer(
-                        call ->
-                                records.values().stream()
-                                        .map(
-                                                r ->
-                                                        new HistorySummary(
-                                                                r.id(), r.createdTime(), r.topic()))
-                                        .toList());
+                        call -> records.values().stream()
+                                .map(
+                                        r -> new HistorySummary(
+                                                r.id(), r.createdTime(), r.topic()))
+                                .toList());
         return history;
     }
 
@@ -106,16 +104,14 @@ class AudioServiceTests {
         var calls = new AtomicInteger();
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        SpeechProvider provider =
-                (t, v, d, l) -> {
-                    calls.incrementAndGet();
-                    entered.countDown();
-                    release.await();
-                    return new byte[] {1, 2};
-                };
-        try (var unused =
-                new CloseableService(
-                        new AudioService(history(), config, provider, new AudioCache(config)))) {
+        SpeechProvider provider = (t, v, d, l) -> {
+            calls.incrementAndGet();
+            entered.countDown();
+            release.await();
+            return new byte[] { 1, 2 };
+        };
+        try (var unused = new CloseableService(
+                new AudioService(history(), config, provider, new AudioCache(config)))) {
             var service = unused.service;
             var mvc = MockMvcBuilders.standaloneSetup(new AudioController(service)).build();
             String base = "/api/dialogs/history/" + id + "/audio";
@@ -161,16 +157,14 @@ class AudioServiceTests {
         config.setPending(1);
         config.setDeadline(Duration.ofMillis(100));
         var calls = new AtomicInteger();
-        SpeechProvider provider =
-                (t, v, d, l) -> {
-                    if (calls.incrementAndGet() == 1) {
-                        Thread.sleep(5000);
-                    }
-                    return new byte[] {1, 2};
-                };
-        try (var close =
-                new CloseableService(
-                        new AudioService(history(), config, provider, new AudioCache(config)))) {
+        SpeechProvider provider = (t, v, d, l) -> {
+            if (calls.incrementAndGet() == 1) {
+                Thread.sleep(5000);
+            }
+            return new byte[] { 1, 2 };
+        };
+        try (var close = new CloseableService(
+                new AudioService(history(), config, provider, new AudioCache(config)))) {
             var service = close.service;
             var id = record("A");
             service.prepare(id);
@@ -192,16 +186,14 @@ class AudioServiceTests {
         config.setPending(1);
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        SpeechProvider provider =
-                (t, v, d, l) -> {
-                    entered.countDown();
-                    release.await();
-                    return new byte[] {1, 2};
-                };
+        SpeechProvider provider = (t, v, d, l) -> {
+            entered.countDown();
+            release.await();
+            return new byte[] { 1, 2 };
+        };
         var history = history();
-        try (var close =
-                new CloseableService(
-                        new AudioService(history, config, provider, new AudioCache(config)))) {
+        try (var close = new CloseableService(
+                new AudioService(history, config, provider, new AudioCache(config)))) {
             var service = close.service;
             var first = record("A");
             var second = record("A");
@@ -227,14 +219,13 @@ class AudioServiceTests {
     void cacheCleanupAndRetryAfterStorageFailureLeaveOtherFilesAlone() throws Exception {
         var config = config();
         var orphan = UUID.randomUUID();
-        Files.write(directory.resolve(orphan + ".wav"), WavAssembler.wrap(new byte[] {1, 2}));
+        Files.write(directory.resolve(orphan + ".wav"), WavAssembler.wrap(new byte[] { 1, 2 }));
         Files.writeString(directory.resolve("keep.txt"), "unrelated");
         var cache = spy(new AudioCache(config));
         doThrow(new java.io.IOException("locked")).doCallRealMethod().when(cache).reconcile(any());
-        try (var close =
-                new CloseableService(
-                        new AudioService(
-                                history(), config, (t, v, d, l) -> new byte[] {1, 2}, cache))) {
+        try (var close = new CloseableService(
+                new AudioService(
+                        history(), config, (t, v, d, l) -> new byte[] { 1, 2 }, cache))) {
             var service = close.service;
             var id = record("A");
             assertEquals(503, assertThrows(AudioFailure.class, () -> service.prepare(id)).status());
@@ -254,10 +245,11 @@ class AudioServiceTests {
         var config = config();
         var cache = new AudioCache(config);
         var id = UUID.randomUUID();
-        Files.write(directory.resolve(id + ".tmp"), WavAssembler.wrap(new byte[] {1, 2}));
+        Files.write(directory.resolve(id + ".tmp"), WavAssembler.wrap(new byte[] { 1, 2 }));
         assertFalse(cache.ready(id));
         assertThrows(AudioFailure.class, () -> cache.read(id));
-        // Symbolic link creation may require Windows developer mode; test when supported.
+        // Symbolic link creation may require Windows developer mode; test when
+        // supported.
         Path external = Files.createTempDirectory("ecospeak-audio-external");
         try {
             try {
@@ -268,7 +260,7 @@ class AudioServiceTests {
             }
             assertThrows(
                     java.io.IOException.class,
-                    () -> cache.publish(id, WavAssembler.wrap(new byte[] {1, 2})));
+                    () -> cache.publish(id, WavAssembler.wrap(new byte[] { 1, 2 })));
             assertFalse(Files.exists(external.resolve("outside.wav")));
         } finally {
             Files.deleteIfExists(external);

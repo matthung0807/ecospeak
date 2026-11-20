@@ -13,9 +13,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class AudioCache {
-    private static final Pattern MANAGED =
-            Pattern.compile(
-                    "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.(wav|tmp)");
+    private static final Pattern MANAGED = Pattern.compile(
+            "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.(wav|tmp)");
     private final Path root;
     private final int maxBytes;
 
@@ -72,12 +71,11 @@ public class AudioCache {
     public void publish(UUID id, byte[] wav) throws IOException {
         Path temporary = file(id, ".tmp");
         try {
-            try (var stream =
-                    Files.newOutputStream(
-                            temporary,
-                            StandardOpenOption.CREATE_NEW,
-                            StandardOpenOption.WRITE,
-                            LinkOption.NOFOLLOW_LINKS)) {
+            try (var stream = Files.newOutputStream(
+                    temporary,
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE,
+                    LinkOption.NOFOLLOW_LINKS)) {
                 stream.write(wav);
             }
             Files.move(

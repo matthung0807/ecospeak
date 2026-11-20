@@ -7,9 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
@@ -20,16 +20,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.matthung.ecospeak.controller.DialogueController;
-import com.matthung.ecospeak.controller.HistoryController;
-import com.matthung.ecospeak.dto.DialogueLine;
-import com.matthung.ecospeak.dto.DialogueResponse;
-import com.matthung.ecospeak.service.DialogueService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -37,6 +31,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,11 +43,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-@SpringBootTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:history-tests;DB_CLOSE_DELAY=0;TRACE_LEVEL_FILE=0",
-            "ecospeak.audio.directory=target/history-audio-tests"
-        })
+import com.matthung.ecospeak.controller.DialogueController;
+import com.matthung.ecospeak.controller.HistoryController;
+import com.matthung.ecospeak.dto.DialogueLine;
+import com.matthung.ecospeak.dto.DialogueResponse;
+import com.matthung.ecospeak.service.DialogueService;
+
+@SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:history-tests;DB_CLOSE_DELAY=0;TRACE_LEVEL_FILE=0",
+        "ecospeak.audio.directory=target/history-audio-tests"
+})
 class HistoryIntegrationTests {
     @Autowired
     HistoryService history;
@@ -84,42 +84,39 @@ class HistoryIntegrationTests {
     @Test
     void idempotencyReplaysAfterExhaustionAndHistoryEviction() throws Exception {
         when(provider.generate(anyString())).thenReturn(content("Coffee"));
-        var request =
+        var request = post("/api/dialogs/generate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", "first")
+                .content("{\"scenario\":\"Coffee\"}");
+        String original = mvc.perform(request)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        mvc.perform(
                 post("/api/dialogs/generate")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .header("Idempotency-Key", "first")
-                        .content("{\"scenario\":\"Coffee\"}");
-        String original =
-                mvc.perform(request)
-                        .andExpect(status().isOk())
-                        .andReturn()
-                        .getResponse()
-                        .getContentAsString();
-        mvc.perform(
-                        post("/api/dialogs/generate")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"scenario\":\"Tea\"}"))
+                        .content("{\"scenario\":\"Tea\"}"))
                 .andExpect(status().isOk());
         mvc.perform(
-                        post("/api/dialogs/generate")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"scenario\":\"Third\"}"))
+                post("/api/dialogs/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scenario\":\"Third\"}"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("dialogue_quota_exceeded"));
         jdbc.update("DELETE FROM dialogue_history");
-        String replay =
-                mvc.perform(request)
-                        .andExpect(status().isOk())
-                        .andReturn()
-                        .getResponse()
-                        .getContentAsString();
+        String replay = mvc.perform(request)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
         assertEquals(original, replay);
         verify(provider, times(2)).generate(anyString());
         mvc.perform(
-                        post("/api/dialogs/generate")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header("Idempotency-Key", "first")
-                                .content("{\"scenario\":\"Different\"}"))
+                post("/api/dialogs/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "first")
+                        .content("{\"scenario\":\"Different\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("idempotency_conflict"));
     }
@@ -136,22 +133,20 @@ class HistoryIntegrationTests {
                             return content("Coffee");
                         });
         try (var pool = Executors.newSingleThreadExecutor()) {
-            var first =
-                    pool.submit(
-                            () ->
-                                    mvc.perform(
-                                                    post("/api/dialogs/generate")
-                                                            .contentType(MediaType.APPLICATION_JSON)
-                                                            .header("Idempotency-Key", "pending")
-                                                            .content("{\"scenario\":\"Coffee\"}"))
-                                            .andExpect(status().isOk()));
+            var first = pool.submit(
+                    () -> mvc.perform(
+                            post("/api/dialogs/generate")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .header("Idempotency-Key", "pending")
+                                    .content("{\"scenario\":\"Coffee\"}"))
+                            .andExpect(status().isOk()));
             try {
                 assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
                 mvc.perform(
-                                post("/api/dialogs/generate")
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .header("Idempotency-Key", "pending")
-                                        .content("{\"scenario\":\"Coffee\"}"))
+                        post("/api/dialogs/generate")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .header("Idempotency-Key", "pending")
+                                .content("{\"scenario\":\"Coffee\"}"))
                         .andExpect(status().isConflict())
                         .andExpect(header().string("Retry-After", "1"))
                         .andExpect(jsonPath("$.code").value("generation_in_progress"));
@@ -160,7 +155,7 @@ class HistoryIntegrationTests {
                         1,
                         jdbc.queryForObject(
                                 "SELECT COUNT(*) FROM dialogue_generation_request WHERE"
-                                    + " state='reserved'",
+                                        + " state='reserved'",
                                 Integer.class));
                 history.save("other", content("other"), Instant.now());
             } finally {
@@ -178,27 +173,26 @@ class HistoryIntegrationTests {
                 .thenReturn(content("Coffee"));
         assertThrows(
                 jakarta.servlet.ServletException.class,
-                () ->
-                        mvc.perform(
-                                post("/api/dialogs/generate")
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .header("Idempotency-Key", "retry")
-                                        .content("{\"scenario\":\"Coffee\"}")));
+                () -> mvc.perform(
+                        post("/api/dialogs/generate")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .header("Idempotency-Key", "retry")
+                                .content("{\"scenario\":\"Coffee\"}")));
         assertEquals(
                 0,
                 jdbc.queryForObject(
                         "SELECT COUNT(*) FROM dialogue_generation_request WHERE state='reserved'",
                         Integer.class));
         mvc.perform(
-                        post("/api/dialogs/generate")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header("Idempotency-Key", "retry")
-                                .content("{\"scenario\":\"Coffee\"}"))
+                post("/api/dialogs/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "retry")
+                        .content("{\"scenario\":\"Coffee\"}"))
                 .andExpect(status().isOk());
         mvc.perform(
-                        post("/api/dialogs/generate")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"scenario\":\"Coffee\"}"))
+                post("/api/dialogs/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scenario\":\"Coffee\"}"))
                 .andExpect(status().isOk());
         verify(provider, times(3)).generate("Coffee");
         assertEquals(
@@ -211,7 +205,7 @@ class HistoryIntegrationTests {
     @Test
     void finalizationFailureRollsBackHistoryAndPreservesAudio() throws Exception {
         when(speech.synthesize(anyString(), anyString(), any(), anyInt()))
-                .thenReturn(new byte[] {1, 2});
+                .thenReturn(new byte[] { 1, 2 });
         var oldest = history.save("scenario", content("old"), Instant.EPOCH);
         audio.prepare(oldest);
         awaitAudio(oldest);
@@ -226,18 +220,17 @@ class HistoryIntegrationTests {
                 .finalizeAttempt(any(), any(), anyString());
         assertThrows(
                 jakarta.servlet.ServletException.class,
-                () ->
-                        mvc.perform(
-                                post("/api/dialogs/generate")
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .content("{\"scenario\":\"Coffee\"}")));
+                () -> mvc.perform(
+                        post("/api/dialogs/generate")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"scenario\":\"Coffee\"}")));
         assertEquals(before, history.list());
         assertArrayEquals(beforeAudio, audio.read(oldest));
         assertEquals(
                 0,
                 jdbc.queryForObject(
                         "SELECT COUNT(*) FROM dialogue_generation_request WHERE state IN"
-                            + " ('reserved','succeeded')",
+                                + " ('reserved','succeeded')",
                         Integer.class));
     }
 
@@ -287,11 +280,10 @@ class HistoryIntegrationTests {
         for (int i = 0; i < 30; i++) {
             ids.add(history.save("scenario", content("tie"), time));
         }
-        var expected =
-                ids.stream()
-                        .sorted(Comparator.comparing(UUID::toString).reversed())
-                        .limit(10)
-                        .toList();
+        var expected = ids.stream()
+                .sorted(Comparator.comparing(UUID::toString).reversed())
+                .limit(10)
+                .toList();
         assertEquals(expected, history.list().stream().map(HistorySummary::id).toList());
         assertEquals(expected, history.list().stream().map(HistorySummary::id).toList());
     }
@@ -334,10 +326,10 @@ class HistoryIntegrationTests {
         }
         var before = history.list();
         doAnswer(
-                        call -> {
-                            call.callRealMethod();
-                            throw new IllegalStateException("cleanup failure");
-                        })
+                call -> {
+                    call.callRealMethod();
+                    throw new IllegalStateException("cleanup failure");
+                })
                 .when(repository)
                 .trim();
         assertThrows(
@@ -350,9 +342,9 @@ class HistoryIntegrationTests {
     void generationPersistsAndReadApisNeverCallProvider() throws Exception {
         when(provider.generate("Ordering coffee")).thenReturn(content("Coffee"));
         mvc.perform(
-                        post("/api/dialogs/generate")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"scenario\":\"  Ordering coffee  \"}"))
+                post("/api/dialogs/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scenario\":\"  Ordering coffee  \"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.historySaved").value(true))
                 .andExpect(jsonPath("$.historyId").isString())
@@ -415,7 +407,7 @@ class HistoryIntegrationTests {
     @Test
     void audioSurvivesRollbackAndExpiresOnlyAfterCommittedRetention() throws Exception {
         when(speech.synthesize(anyString(), anyString(), any(), anyInt()))
-                .thenReturn(new byte[] {1, 2});
+                .thenReturn(new byte[] { 1, 2 });
         var oldest = history.save("scenario", content("old"), Instant.EPOCH);
         audio.prepare(oldest);
         awaitAudio(oldest);
@@ -424,10 +416,10 @@ class HistoryIntegrationTests {
             history.save("scenario", content("retained"), Instant.now());
         }
         doAnswer(
-                        call -> {
-                            call.callRealMethod();
-                            throw new IllegalStateException("rollback");
-                        })
+                call -> {
+                    call.callRealMethod();
+                    throw new IllegalStateException("rollback");
+                })
                 .when(repository)
                 .trim();
         assertThrows(
@@ -441,8 +433,8 @@ class HistoryIntegrationTests {
         assertEquals(
                 404,
                 assertThrows(
-                                com.matthung.ecospeak.audio.AudioFailure.class,
-                                () -> audio.read(oldest))
+                        com.matthung.ecospeak.audio.AudioFailure.class,
+                        () -> audio.read(oldest))
                         .status());
         assertFalse(
                 java.nio.file.Files.exists(
@@ -460,7 +452,7 @@ class HistoryIntegrationTests {
                             entered.countDown();
                             try {
                                 release.await();
-                                return new byte[] {1, 2};
+                                return new byte[] { 1, 2 };
                             } finally {
                                 exited.countDown();
                             }
@@ -479,8 +471,8 @@ class HistoryIntegrationTests {
             assertEquals(
                     404,
                     assertThrows(
-                                    com.matthung.ecospeak.audio.AudioFailure.class,
-                                    () -> audio.status(oldest))
+                            com.matthung.ecospeak.audio.AudioFailure.class,
+                            () -> audio.status(oldest))
                             .status());
         } finally {
             release.countDown();

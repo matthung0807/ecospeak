@@ -21,10 +21,9 @@ class QuotaCalendarTests {
         properties.validate();
         assertEquals(2, properties.getDailyLimit());
         assertEquals(10, properties.getWeeklyLimit());
-        var calendar =
-                new QuotaCalendar(
-                        properties,
-                        Clock.fixed(Instant.parse("2026-11-15T15:59:59Z"), ZoneOffset.UTC));
+        var calendar = new QuotaCalendar(
+                properties,
+                Clock.fixed(Instant.parse("2026-11-15T15:59:59Z"), ZoneOffset.UTC));
         var before = calendar.current();
         var after = calendar.at(Instant.parse("2026-11-15T16:00:00Z"));
         assertEquals(Instant.parse("2026-11-15T16:00:00Z"), before.dailyReset());
@@ -41,9 +40,8 @@ class QuotaCalendarTests {
         properties.setDailyLimit(3);
         properties.setWeeklyLimit(12);
         properties.validate();
-        var periods =
-                new QuotaCalendar(properties, Clock.systemUTC())
-                        .at(Instant.parse("2026-03-08T12:00:00Z"));
+        var periods = new QuotaCalendar(properties, Clock.systemUTC())
+                .at(Instant.parse("2026-03-08T12:00:00Z"));
         assertEquals(Instant.parse("2026-03-08T05:00:00Z"), periods.dailyStart());
         assertEquals(Instant.parse("2026-03-09T04:00:00Z"), periods.dailyReset());
     }

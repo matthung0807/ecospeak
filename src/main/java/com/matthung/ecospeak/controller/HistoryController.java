@@ -38,15 +38,13 @@ public class HistoryController {
         try {
             var record = history.find(UUID.fromString(id));
             return record.<ResponseEntity<?>>map(
-                            value ->
-                                    ResponseEntity.ok()
-                                            .cacheControl(CacheControl.noStore())
-                                            .body(value))
+                    value -> ResponseEntity.ok()
+                            .cacheControl(CacheControl.noStore())
+                            .body(value))
                     .orElseGet(
-                            () ->
-                                    ResponseEntity.status(HttpStatus.NOT_FOUND)
-                                            .cacheControl(CacheControl.noStore())
-                                            .build());
+                            () -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                    .cacheControl(CacheControl.noStore())
+                                    .build());
         } catch (RuntimeException exception) {
             return ResponseEntity.internalServerError()
                     .cacheControl(CacheControl.noStore())

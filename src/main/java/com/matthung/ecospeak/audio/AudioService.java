@@ -25,8 +25,7 @@ public class AudioService {
     public record State(String status, String statusUrl, String audioUrl, String code) {
     }
 
-    private static final org.slf4j.Logger log =
-            org.slf4j.LoggerFactory.getLogger(AudioService.class);
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AudioService.class);
     private final HistoryService history;
     private final AudioProperties config;
     private final SpeechProvider provider;
@@ -55,17 +54,15 @@ public class AudioService {
         this.provider = provider;
         this.cache = cache;
         config.validate();
-        workers =
-                new ThreadPoolExecutor(
-                        config.getWorkers(),
-                        config.getWorkers(),
-                        0,
-                        TimeUnit.SECONDS,
-                        new ArrayBlockingQueue<>(config.getPending()),
-                        Thread.ofPlatform().daemon().name("dialogue-audio-", 0).factory());
-        timer =
-                new ScheduledThreadPoolExecutor(
-                        1, Thread.ofPlatform().daemon().name("audio-deadlines-", 0).factory());
+        workers = new ThreadPoolExecutor(
+                config.getWorkers(),
+                config.getWorkers(),
+                0,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(config.getPending()),
+                Thread.ofPlatform().daemon().name("dialogue-audio-", 0).factory());
+        timer = new ScheduledThreadPoolExecutor(
+                1, Thread.ofPlatform().daemon().name("audio-deadlines-", 0).factory());
         timer.setRemoveOnCancelPolicy(true);
         history.onEviction(this::evict);
         reconcile();
@@ -135,32 +132,29 @@ public class AudioService {
                     }
                     var job = new Job();
                     long deadline = System.nanoTime() + config.getDeadline().toNanos();
-                    job.task =
-                            new FutureTask<>(
-                                    () -> {
-                                        generate(id, detail, job, deadline);
-                                        return null;
-                                    });
+                    job.task = new FutureTask<>(
+                            () -> {
+                                generate(id, detail, job, deadline);
+                                return null;
+                            });
                     jobs.put(id, job);
                     try {
                         workers.execute(job.task);
-                        job.timeout =
-                                timer.schedule(
-                                        () ->
-                                                history.coordinated(
-                                                        () -> {
-                                                            if (jobs.get(id) == job
-                                                                    && "generating"
-                                                                            .equals(job.status)) {
-                                                                job.status = "failed";
-                                                                job.code = "audio_timeout";
-                                                                job.task.cancel(true);
-                                                                workers.remove(job.task);
-                                                            }
-                                                            return null;
-                                                        }),
-                                        config.getDeadline().toNanos(),
-                                        TimeUnit.NANOSECONDS);
+                        job.timeout = timer.schedule(
+                                () -> history.coordinated(
+                                        () -> {
+                                            if (jobs.get(id) == job
+                                                    && "generating"
+                                                            .equals(job.status)) {
+                                                job.status = "failed";
+                                                job.code = "audio_timeout";
+                                                job.task.cancel(true);
+                                                workers.remove(job.task);
+                                            }
+                                            return null;
+                                        }),
+                                config.getDeadline().toNanos(),
+                                TimeUnit.NANOSECONDS);
                     } catch (RejectedExecutionException full) {
                         jobs.remove(id, job);
                         job.task.cancel(true);
@@ -200,14 +194,12 @@ public class AudioService {
                     () -> {
                         if (jobs.get(id) == job && "generating".equals(job.status)) {
                             job.status = "failed";
-                            Throwable cause =
-                                    failure instanceof ExecutionException
-                                            ? failure.getCause()
-                                            : failure;
-                            job.code =
-                                    cause instanceof AudioFailure audio
-                                            ? audio.code()
-                                            : "audio_generation_failed";
+                            Throwable cause = failure instanceof ExecutionException
+                                    ? failure.getCause()
+                                    : failure;
+                            job.code = cause instanceof AudioFailure audio
+                                    ? audio.code()
+                                    : "audio_generation_failed";
                             if (job.timeout != null) {
                                 job.timeout.cancel(false);
                             }
@@ -257,10 +249,9 @@ public class AudioService {
                     try {
                         var retained = new HashSet<UUID>();
                         history.list().forEach(item -> retained.add(item.id()));
-                        var expired =
-                                jobs.keySet().stream()
-                                        .filter(id -> !retained.contains(id))
-                                        .toList();
+                        var expired = jobs.keySet().stream()
+                                .filter(id -> !retained.contains(id))
+                                .toList();
                         evict(expired);
                         cache.reconcile(retained);
                         cacheAvailable = true;

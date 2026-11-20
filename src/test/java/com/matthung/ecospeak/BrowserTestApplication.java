@@ -12,7 +12,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
-/** Test-only launcher: real HTTP/storage/static pages with a deterministic provider stub. */
+/**
+ * Test-only launcher: real HTTP/storage/static pages with a deterministic
+ * provider stub.
+ */
 public class BrowserTestApplication {
     public static void main(String[] args) {
         var application = new SpringApplication(EcospeakApplication.class, StubProvider.class);

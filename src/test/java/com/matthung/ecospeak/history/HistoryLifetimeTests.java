@@ -25,7 +25,7 @@ class HistoryLifetimeTests {
     Path directory;
 
     @TestConfiguration(proxyBeanMethods = false)
-    @Import({HistoryService.class, HistoryRepository.class})
+    @Import({ HistoryService.class, HistoryRepository.class })
     static class StorageContext {
         @Bean(destroyMethod = "close")
         HikariDataSource dataSource() throws Exception {
@@ -71,20 +71,19 @@ class HistoryLifetimeTests {
                         first.getBean(HikariDataSource.class)
                                 .getJdbcUrl()
                                 .startsWith("jdbc:h2:mem:"));
-                id =
-                        first.getBean(HistoryService.class)
-                                .save(
-                                        "scenario",
-                                        HistoryIntegrationTests.content("topic"),
-                                        Instant.now());
+                id = first.getBean(HistoryService.class)
+                        .save(
+                                "scenario",
+                                HistoryIntegrationTests.content("topic"),
+                                Instant.now());
                 assertTrue(first.getBean(HistoryService.class).find(id).isPresent());
                 first.getBean(JdbcTemplate.class)
                         .update(
                                 "INSERT INTO dialogue_generation_request (id, scenario,"
-                                    + " reserved_at, daily_period_start, weekly_period_start,"
-                                    + " attempt_token, state) VALUES (?, 'scenario',"
-                                    + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?,"
-                                    + " 'succeeded')",
+                                        + " reserved_at, daily_period_start, weekly_period_start,"
+                                        + " attempt_token, state) VALUES (?, 'scenario',"
+                                        + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?,"
+                                        + " 'succeeded')",
                                 UUID.randomUUID().toString(),
                                 UUID.randomUUID().toString());
             }

@@ -22,7 +22,7 @@ public class HistoryRepository {
             UUID id, Instant time, String scenario, DialogueResponse response, String json) {
         jdbc.update(
                 "INSERT INTO dialogue_history (id, created_time, topic, target_phrase, scenario,"
-                    + " dialogues) VALUES (?, ?, ?, ?, ?, ?)",
+                        + " dialogues) VALUES (?, ?, ?, ?, ?, ?)",
                 id.toString(),
                 time.atOffset(ZoneOffset.UTC),
                 response.getTopic(),
@@ -32,10 +32,9 @@ public class HistoryRepository {
     }
 
     public List<UUID> trim() {
-        var ids =
-                jdbc.queryForList(
-                        "SELECT id FROM dialogue_history ORDER BY created_time DESC, id DESC",
-                        String.class);
+        var ids = jdbc.queryForList(
+                "SELECT id FROM dialogue_history ORDER BY created_time DESC, id DESC",
+                String.class);
         for (int i = 10; i < ids.size(); i++) {
             jdbc.update("DELETE FROM dialogue_history WHERE id = ?", ids.get(i));
         }
@@ -45,27 +44,25 @@ public class HistoryRepository {
     public List<HistorySummary> list() {
         return jdbc.query(
                 "SELECT id, created_time, topic FROM dialogue_history ORDER BY created_time DESC,"
-                    + " id DESC",
-                (rs, row) ->
-                        new HistorySummary(
-                                UUID.fromString(rs.getString("id")),
-                                rs.getObject("created_time", OffsetDateTime.class).toInstant(),
-                                rs.getString("topic")));
+                        + " id DESC",
+                (rs, row) -> new HistorySummary(
+                        UUID.fromString(rs.getString("id")),
+                        rs.getObject("created_time", OffsetDateTime.class).toInstant(),
+                        rs.getString("topic")));
     }
 
     public Optional<StoredDialogue> find(UUID id) {
         return jdbc
                 .query(
                         "SELECT * FROM dialogue_history WHERE id = ?",
-                        (rs, row) ->
-                                new StoredDialogue(
-                                        UUID.fromString(rs.getString("id")),
-                                        rs.getObject("created_time", OffsetDateTime.class)
-                                                .toInstant(),
-                                        rs.getString("topic"),
-                                        rs.getString("target_phrase"),
-                                        rs.getString("scenario"),
-                                        rs.getString("dialogues")),
+                        (rs, row) -> new StoredDialogue(
+                                UUID.fromString(rs.getString("id")),
+                                rs.getObject("created_time", OffsetDateTime.class)
+                                        .toInstant(),
+                                rs.getString("topic"),
+                                rs.getString("target_phrase"),
+                                rs.getString("scenario"),
+                                rs.getString("dialogues")),
                         id.toString())
                 .stream()
                 .findFirst();

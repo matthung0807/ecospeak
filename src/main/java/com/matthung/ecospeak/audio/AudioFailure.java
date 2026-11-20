@@ -1,6 +1,9 @@
 package com.matthung.ecospeak.audio;
 
-/** Safe public code only; never include provider payloads, text, paths, or credentials. */
+/**
+ * Safe public code only; never include provider payloads, text, paths, or
+ * credentials.
+ */
 public class AudioFailure extends RuntimeException {
     private final int status;
     private final String code;

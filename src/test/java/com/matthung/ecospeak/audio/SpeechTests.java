@@ -34,10 +34,9 @@ class SpeechTests {
 
     @Test
     void configurationBindsAndRejectsInvalidSettings() {
-        var source =
-                new MapConfigurationPropertySource(
-                        java.util.Map.of(
-                                "ecospeak.audio.workers", "3", "ecospeak.audio.deadline", "25s"));
+        var source = new MapConfigurationPropertySource(
+                java.util.Map.of(
+                        "ecospeak.audio.workers", "3", "ecospeak.audio.deadline", "25s"));
         var config = new Binder(source).bind("ecospeak.audio", AudioProperties.class).get();
         config.validate();
         assertEquals(3, config.getWorkers());
@@ -52,17 +51,15 @@ class SpeechTests {
     @Test
     void orderedVoicesPauseAndOneWavHeader() throws Exception {
         var calls = new ArrayList<String>();
-        SpeechProvider provider =
-                (text, voice, timeout, limit) -> {
-                    calls.add(voice + ":" + text);
-                    return new byte[] {1, 2};
-                };
-        byte[] wav =
-                WavAssembler.assemble(
-                        List.of(line("A", "First"), line("B", "Second"), line("A", "Third")),
-                        provider,
-                        new AudioProperties(),
-                        System.nanoTime() + 1_000_000_000L);
+        SpeechProvider provider = (text, voice, timeout, limit) -> {
+            calls.add(voice + ":" + text);
+            return new byte[] { 1, 2 };
+        };
+        byte[] wav = WavAssembler.assemble(
+                List.of(line("A", "First"), line("B", "Second"), line("A", "Third")),
+                provider,
+                new AudioProperties(),
+                System.nanoTime() + 1_000_000_000L);
         assertEquals(List.of("marin:First", "cedar:Second", "marin:Third"), calls);
         var bytes = ByteBuffer.wrap(wav).order(ByteOrder.LITTLE_ENDIAN);
         assertEquals("RIFF", new String(wav, 0, 4, java.nio.charset.StandardCharsets.US_ASCII));
@@ -79,36 +76,31 @@ class SpeechTests {
         var cfg = new AudioProperties();
         assertThrows(
                 AudioFailure.class,
-                () ->
-                        WavAssembler.assemble(
-                                lines, (t, v, d, l) -> new byte[0], cfg, Long.MAX_VALUE));
+                () -> WavAssembler.assemble(
+                        lines, (t, v, d, l) -> new byte[0], cfg, Long.MAX_VALUE));
         assertThrows(
                 AudioFailure.class,
-                () ->
-                        WavAssembler.assemble(
-                                lines, (t, v, d, l) -> new byte[3], cfg, Long.MAX_VALUE));
+                () -> WavAssembler.assemble(
+                        lines, (t, v, d, l) -> new byte[3], cfg, Long.MAX_VALUE));
         assertThrows(
                 AudioFailure.class,
-                () ->
-                        WavAssembler.assemble(
-                                lines,
-                                (t, v, d, l) -> new byte[cfg.getMaxOutputBytes()],
-                                cfg,
-                                Long.MAX_VALUE));
+                () -> WavAssembler.assemble(
+                        lines,
+                        (t, v, d, l) -> new byte[cfg.getMaxOutputBytes()],
+                        cfg,
+                        Long.MAX_VALUE));
         assertThrows(
                 AudioFailure.class,
-                () ->
-                        WavAssembler.assemble(
-                                lines, (t, v, d, l) -> new byte[2], cfg, System.nanoTime() - 1));
+                () -> WavAssembler.assemble(
+                        lines, (t, v, d, l) -> new byte[2], cfg, System.nanoTime() - 1));
     }
 
     @Test
     void realtimeProtocolRequiresCompleteAudioAndDoesNotLeakProviderError() {
         var ws = mock(WebSocket.class);
         when(ws.sendText(any(), eq(true))).thenReturn(CompletableFuture.completedFuture(ws));
-        var events =
-                new OpenAiSpeechProvider.Events(
-                        JsonMapper.builder().build(), "Hello", "marin", 100);
+        var events = new OpenAiSpeechProvider.Events(
+                JsonMapper.builder().build(), "Hello", "marin", 100);
         events.onText(ws, "{\"type\":\"session.created\"}", true);
         events.onText(ws, "{\"type\":\"session.updated\"}", true);
         verify(ws, times(2)).sendText(any(), eq(true));
@@ -117,10 +109,9 @@ class SpeechTests {
         events.onText(ws, "{\"type\":\"response.output_audio.done\"}", true);
         events.onText(
                 ws, "{\"type\":\"response.done\",\"response\":{\"status\":\"completed\"}}", true);
-        assertArrayEquals(new byte[] {1, 2}, events.result.join());
-        var incomplete =
-                new OpenAiSpeechProvider.Events(
-                        JsonMapper.builder().build(), "Hello", "marin", 100);
+        assertArrayEquals(new byte[] { 1, 2 }, events.result.join());
+        var incomplete = new OpenAiSpeechProvider.Events(
+                JsonMapper.builder().build(), "Hello", "marin", 100);
         incomplete.onText(
                 ws, "{\"type\":\"response.done\",\"response\":{\"status\":\"incomplete\"}}", true);
         assertTrue(incomplete.result.isCompletedExceptionally());

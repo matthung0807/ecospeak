@@ -23,8 +23,7 @@ public class DialogueService {
 
     public DialogueResponse generate(String scenario) {
 
-        String prompt =
-                """
+        String prompt = """
                 You are an expert English language coach focusing on
                 authentic everyday conversation for upper-intermediate learners.
 
@@ -44,13 +43,12 @@ public class DialogueService {
                 9. Give the scenario a short descriptive topic.
                 """;
 
-        StructuredResponseCreateParams<DialogueResponse> params =
-                ResponseCreateParams.builder()
-                        .model("gpt-5.6-terra")
-                        .instructions(prompt)
-                        .input(scenario)
-                        .text(DialogueResponse.class)
-                        .build();
+        StructuredResponseCreateParams<DialogueResponse> params = ResponseCreateParams.builder()
+                .model("gpt-5.6-terra")
+                .instructions(prompt)
+                .input(scenario)
+                .text(DialogueResponse.class)
+                .build();
 
         StructuredResponse<DialogueResponse> response = client.responses().create(params);
 

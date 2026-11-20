@@ -14,10 +14,9 @@ public final class DialogueValidation {
                 || response.getDialogue().isEmpty()
                 || response.getDialogue().stream()
                         .anyMatch(
-                                line ->
-                                        line == null
-                                                || !nonblank(line.getSpeaker())
-                                                || !nonblank(line.getText()))) {
+                                line -> line == null
+                                        || !nonblank(line.getSpeaker())
+                                        || !nonblank(line.getText()))) {
             throw new IllegalStateException("Incomplete dialogue response");
         }
     }
@@ -26,9 +25,8 @@ public final class DialogueValidation {
         return value != null
                 && value.codePoints()
                         .anyMatch(
-                                c ->
-                                        !Character.isWhitespace(c)
-                                                && !Character.isSpaceChar(c)
-                                                && c != 0xFEFF);
+                                c -> !Character.isWhitespace(c)
+                                        && !Character.isSpaceChar(c)
+                                        && c != 0xFEFF);
     }
 }

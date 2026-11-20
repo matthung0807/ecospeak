@@ -52,11 +52,10 @@ class HistoryServiceTests {
         service.onEviction(ids -> called.set(true));
         assertThrows(
                 TransactionSystemException.class,
-                () ->
-                        service.save(
-                                "scenario",
-                                HistoryIntegrationTests.content("topic"),
-                                Instant.now()));
+                () -> service.save(
+                        "scenario",
+                        HistoryIntegrationTests.content("topic"),
+                        Instant.now()));
         assertFalse(called.get());
     }
 
@@ -70,11 +69,10 @@ class HistoryServiceTests {
                 .thenThrow(new IllegalArgumentException("serialization failed"));
         assertThrows(
                 IllegalArgumentException.class,
-                () ->
-                        service.save(
-                                "scenario",
-                                HistoryIntegrationTests.content("topic"),
-                                Instant.now()));
+                () -> service.save(
+                        "scenario",
+                        HistoryIntegrationTests.content("topic"),
+                        Instant.now()));
         verifyNoInteractions(repository, manager);
     }
 
@@ -90,11 +88,10 @@ class HistoryServiceTests {
         var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
         assertThrows(
                 IllegalStateException.class,
-                () ->
-                        service.save(
-                                "scenario",
-                                HistoryIntegrationTests.content("topic"),
-                                Instant.now()));
+                () -> service.save(
+                        "scenario",
+                        HistoryIntegrationTests.content("topic"),
+                        Instant.now()));
         verify(manager).rollback(status);
         verify(manager, never()).commit(any());
         verify(repository, never()).trim();
@@ -110,11 +107,10 @@ class HistoryServiceTests {
         var service = new HistoryService(repository, JsonMapper.builder().build(), manager);
         assertThrows(
                 TransactionSystemException.class,
-                () ->
-                        service.save(
-                                "scenario",
-                                HistoryIntegrationTests.content("topic"),
-                                Instant.now()));
+                () -> service.save(
+                        "scenario",
+                        HistoryIntegrationTests.content("topic"),
+                        Instant.now()));
         var order = inOrder(repository, manager);
         order.verify(manager).getTransaction(any());
         order.verify(repository).insert(any(), any(), any(), any(), any());

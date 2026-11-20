@@ -33,14 +33,12 @@ public final class WavAssembler {
             if (pcm.size() > 0) {
                 append(pcm, PAUSE, config.getMaxOutputBytes() - 44);
             }
-            var timeout =
-                    Duration.ofNanos(Math.min(remaining, config.getRequestTimeout().toNanos()));
-            byte[] turn =
-                    provider.synthesize(
-                            line.getText(),
-                            "A".equals(line.getSpeaker()) ? config.getVoiceA() : config.getVoiceB(),
-                            timeout,
-                            config.getMaxOutputBytes() - 44 - pcm.size());
+            var timeout = Duration.ofNanos(Math.min(remaining, config.getRequestTimeout().toNanos()));
+            byte[] turn = provider.synthesize(
+                    line.getText(),
+                    "A".equals(line.getSpeaker()) ? config.getVoiceA() : config.getVoiceB(),
+                    timeout,
+                    config.getMaxOutputBytes() - 44 - pcm.size());
             if (turn == null || turn.length == 0 || turn.length % 2 != 0) {
                 throw new AudioFailure(502, "invalid_audio");
             }
